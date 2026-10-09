@@ -9,3 +9,9 @@ Use Node 24.19.x. Run `npm ci`, `npm run check`, `npm test`, `npm run build`, `n
 Code is **MIT OR Apache-2.0**, at your option. Retain both license texts. Font files retain their separate SIL OFL notices and provenance; Still runtime contains no fonts.
 
 Historical fixture/export documentation is retained in [docs/historical-producer.md](docs/historical-producer.md). Exporters produce those preserved regression variants; the branded starter is the current default with verified offline caching and native intent prefetch. Local qualification does not establish hosted readiness or approve publication/deployment.
+
+## License scope when adapting a starter
+
+The upstream owner grants MIT OR Apache-2.0 for this public template/library code and its original neutral examples. This grant does not license a consumer's replacement articles, photographs, branding, application additions or other independently owned material. Font files retain their OFL terms; dependencies retain their own licenses.
+
+When creating your application, choose its package metadata and code/content license deliberately rather than inheriting the template's license field as a blanket declaration. A private application may use `UNLICENSED` for its own package while retaining the required upstream copyright and license notices for reused code, fonts and dependencies. Do not remove those notices or imply that private content became MIT-licensed merely by consuming a library.
