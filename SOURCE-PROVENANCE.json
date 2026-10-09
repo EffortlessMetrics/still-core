@@ -4,7 +4,7 @@
   "sourceCommit": "63ccea2acdb06727c2206ff8c53e59f725485046",
   "frozenSourceMapSha256": "25f93f7697bb494736d333d20f5a6299fcb11eada9a926620bd2454631dff77e",
   "frozenSnapshot": "thin-migration-local",
-  "changes": "Repository metadata, unique candidate version, ownership docs and corresponding contract assertions; Astro includes previously independently qualified canonical offline preset",
+  "changes": "Repository metadata, unique candidate version, ownership docs and corresponding contract assertions; Astro includes previously independently qualified canonical offline preset; fresh-export application licensing separation, scoped notices, immutable CI action pins and historical link corrections",
   "privateSourceImported": false,
   "deniedStillPR4Included": false
 }

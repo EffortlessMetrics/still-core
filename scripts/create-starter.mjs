@@ -1,3 +1,4 @@
+import { scopeStarterLicense } from "./scope-starter-license.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { copyFile, lstat, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
@@ -60,6 +61,7 @@ try {
     await mkdir(dirname(target), { recursive: true });
     await copyFile(join(producer, file), target);
   }
+  await scopeStarterLicense(destination);
   const manifest = JSON.parse(await readFile(join(destination, "package.json"), "utf8"));
   manifest.dependencies["@effortlessmetrics/still"] = `file:vendor/${packed.filename}`;
   await writeFile(join(destination, "package.json"), JSON.stringify(manifest, null, 2) + "\n");

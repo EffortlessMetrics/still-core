@@ -15,3 +15,5 @@ Historical fixture/export documentation is retained in [docs/historical-producer
 The upstream owner grants MIT OR Apache-2.0 for this public template/library code and its original neutral examples. This grant does not license a consumer's replacement articles, photographs, branding, application additions or other independently owned material. Font files retain their OFL terms; dependencies retain their own licenses.
 
 When creating your application, choose its package metadata and code/content license deliberately rather than inheriting the template's license field as a blanket declaration. A private application may use `UNLICENSED` for its own package while retaining the required upstream copyright and license notices for reused code, fonts and dependencies. Do not remove those notices or imply that private content became MIT-licensed merely by consuming a library.
+
+Starter exporters set the generated application package to `UNLICENSED` and move required upstream notices into `licenses/template/`. They do not copy a blanket template license onto the generated site or replacement content. Fresh-export regressions enforce this separation.

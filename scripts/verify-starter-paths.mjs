@@ -43,6 +43,13 @@ try {
       JSON.parse(await readFile(join(destination, "package.json"), "utf8")).private,
       true,
     );
+    const app = JSON.parse(await readFile(join(destination, "package.json"), "utf8"));
+    assert.equal(app.license, "UNLICENSED", "Generated application must not inherit the template license");
+    for (const notice of ["LICENSE", "LICENSE-MIT", "LICENSE-APACHE"]) {
+      await assert.rejects(access(join(destination, notice)), { code: "ENOENT" });
+      assert.deepEqual(await readFile(join(destination, "licenses/template", notice)), await readFile(join(producer, notice)), "Preserve exact upstream notice: " + notice);
+    }
+    assert.match(await readFile(join(destination, "licenses/template/README.md"), "utf8"), /does not license.*replacement content/);
     const refused = run(join(insideAlias, "consumer"));
     assert.notEqual(refused.status, 0, "Existing consumer must not be replaced");
     assert.match(refused.stderr, /EEXIST/);
