@@ -1,0 +1,14 @@
+---
+interface Props { title: string; description: string; origin: string; canonicalPath?: string; imageAlt?: string; imagePath?: string; themeStorageKey?: string; production?: boolean; language?: string; faviconPath?: string; mainId?: string; themeButtonId?: string; bodyClass?: string; }
+const { title, description, origin, canonicalPath = '/', imageAlt = title, imagePath, themeStorageKey = 'site-theme', production = import.meta.env.PUBLIC_SITE_ENV === 'production', language = 'en', faviconPath = '/favicon.svg', mainId = 'main', themeButtonId = 'theme', bodyClass = '' } = Astro.props;
+---
+<!doctype html><html lang={language}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="robots" content={production ? 'index,follow' : 'noindex,nofollow'}/><meta name="description" content={description}/><link rel="canonical" href={origin + canonicalPath}/><link rel="icon" type="image/svg+xml" href={faviconPath}/><meta property="og:type" content="website"/><meta property="og:title" content={title}/><meta property="og:description" content={description}/><meta property="og:url" content={origin + canonicalPath}/>{imagePath && <><meta property="og:image" content={origin + imagePath}/><meta property="og:image:alt" content={imageAlt}/></>}<meta name="twitter:card" content={imagePath ? 'summary_large_image' : 'summary'}/><title>{title}</title><script is:inline define:vars={{themeStorageKey}}>try{const saved=localStorage.getItem(themeStorageKey);if(saved==='light'||saved==='dark')document.documentElement.dataset.theme=saved;}catch{}</script></head>
+<body class={bodyClass} data-theme-key={themeStorageKey} data-theme-button={themeButtonId}><a class="skip" href={'#' + mainId}>Skip to content</a><slot name="header"/><slot/><slot name="footer"/><slot name="body-end"/>
+<script>
+const button = document.getElementById(document.body.dataset.themeButton || 'theme');
+const preference = matchMedia('(prefers-color-scheme: dark)');
+const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && preference.matches);
+const sync = () => button?.setAttribute('aria-pressed', String(isDark()));
+sync(); preference.addEventListener('change', sync);
+button?.addEventListener('click', () => {const theme = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; try {localStorage.setItem(document.body.dataset.themeKey || 'site-theme', theme);} catch {} sync();});
+</script></body></html>

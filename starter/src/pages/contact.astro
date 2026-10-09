@@ -1,0 +1,8 @@
+---
+import Site from '../layouts/Site.astro';
+import ServicePage from '@effortlessmetrics/still/service-page';
+---
+<Site title="Contact" description="A neutral contact-page example. This sample does not send or store messages." canonicalPath="/contact/">
+<ServicePage><p class="eyebrow">Start a conversation</p><h1>A question is<br/>a <em>good beginning.</em></h1><p class="package-details">Describe what you are working on, where things feel unclear, and what a useful next step would look like.</p><p id="sample-notice" class="quiet">This is an informational starter. The example form is disabled and does not send, store, or queue messages. Add your own contact details and privacy notice before enabling a contact service.</p>
+<form class="sample-form" aria-describedby="sample-notice"><fieldset disabled><legend>Message example — sending unavailable</legend><label>Name<input name="name" autocomplete="name"/></label><label>Email<input name="email" type="email" autocomplete="email"/></label><label>What would you like to discuss?<textarea name="message" rows="5"></textarea></label><button type="button" disabled>Sending unavailable</button></fieldset></form>
+<p><a href="/">Return to the overview</a></p></ServicePage></Site>

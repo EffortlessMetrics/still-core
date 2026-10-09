@@ -1,0 +1,50 @@
+{
+  "name": "@effortlessmetrics/still",
+  "version": "0.2.1",
+  "description": "Readable Astro service-site design, components and page composition.",
+  "type": "module",
+  "license": "MIT OR Apache-2.0",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    "./layout": "./src/Layout.astro",
+    "./header": "./src/Header.astro",
+    "./footer": "./src/Footer.astro",
+    "./page": "./src/Page.astro",
+    "./opening": "./src/Opening.astro",
+    "./section": "./src/Section.astro",
+    "./offer-grid": "./src/OfferGrid.astro",
+    "./offer": "./src/Offer.astro",
+    "./action": "./src/Action.astro",
+    "./service-page": "./src/ServicePage.astro",
+    "./service-columns": "./src/ServiceColumns.astro",
+    "./service-offer": "./src/ServiceOffer.astro",
+    "./styles.css": "./src/styles.css",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "astro": "^7.3.5"
+  },
+  "engines": {
+    "node": ">=24.19.0 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EffortlessMetrics/still-core.git",
+    "directory": "packages/still"
+  },
+  "homepage": "https://github.com/EffortlessMetrics/still-core#readme",
+  "bugs": {
+    "url": "https://github.com/EffortlessMetrics/still-core/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

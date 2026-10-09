@@ -1,0 +1,5 @@
+---
+interface Props { id?: string; label?: string; class?: string; }
+const { id, label, class: className } = Astro.props;
+---
+<section id={id} class:list={['engagements', 'wrap', className]} aria-label={label}><slot/></section>

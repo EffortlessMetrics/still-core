@@ -1,0 +1,17 @@
+---
+import Site from '../layouts/Site.astro';
+import Page from '@effortlessmetrics/still/page';
+import Opening from '@effortlessmetrics/still/opening';
+import Section from '@effortlessmetrics/still/section';
+import OfferGrid from '@effortlessmetrics/still/offer-grid';
+import Offer from '@effortlessmetrics/still/offer';
+import Action from '@effortlessmetrics/still/action';
+---
+<Site title="Small steps. Clear progress." description="Practical workshops and project support for teams finding their next useful step.">
+<Page compact>
+<Opening><p class="eyebrow">A clearer way forward</p><h1>Small steps.<br/><em>Clear progress.</em></h1></Opening>
+<Section id="services" label="Ways to work together"><OfferGrid>
+<Offer><h2>Workshops</h2><p>Make room for a shared question, a useful experiment, and a decision everyone can explain.</p><Action href="/workshops/">Explore workshops</Action></Offer>
+<Offer><h2>Project support</h2><p>Bring a second pair of eyes to a difficult handoff, an early prototype, or a plan that needs testing.</p><Action href="/project-support/">Explore project support</Action></Offer>
+</OfferGrid><p class="contact-action"><Action href="/contact/">Start a conversation</Action></p></Section>
+</Page></Site>

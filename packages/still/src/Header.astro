@@ -1,0 +1,5 @@
+---
+interface Props { brand: string; brandHref?: string; links?: ReadonlyArray<{label: string; href: string}>; navigationLabel?: string; themeLabel?: string; themeButtonId?: string; class?: string; }
+const { brand, brandHref = '/', links = [], navigationLabel = 'Main', themeLabel = 'Switch light or dark theme', themeButtonId = 'theme', class: className } = Astro.props;
+---
+<header class:list={['wrap', className]}><a class="wordmark" href={brandHref}>{brand}</a><nav aria-label={navigationLabel}>{links.map(link => <a href={link.href}>{link.label}</a>)}<slot name="navigation"/><button class="still-theme-button" id={themeButtonId} type="button" aria-label={themeLabel} aria-pressed="false"><slot name="theme">◐</slot></button></nav></header>

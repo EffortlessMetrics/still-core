@@ -1,0 +1,5 @@
+---
+interface Props { label?: string; class?: string; }
+const { label = 'Site footer', class: className } = Astro.props;
+---
+<footer class:list={['wrap', 'site-footer', className]} aria-label={label}><slot/></footer>
