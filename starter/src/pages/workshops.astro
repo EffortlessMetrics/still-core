@@ -1,0 +1,14 @@
+---
+import Site from '../layouts/Site.astro';
+import ServicePage from '@effortlessmetrics/still/service-page';
+import ServiceColumns from '@effortlessmetrics/still/service-columns';
+import ServiceOffer from '@effortlessmetrics/still/service-offer';
+import Action from '@effortlessmetrics/still/action';
+---
+<Site title="Workshops" description="Three simple workshop formats for shared questions, decisions, and useful experiments." canonicalPath="/workshops/">
+<ServicePage><p class="eyebrow">Workshops</p><h1>Find the next <em>useful step.</em></h1><p class="package-details">A focused session gives your team time to compare what you know, name what is missing, and choose a small test.</p>
+<ServiceColumns columns={3}>
+<ServiceOffer class="offer" headingId="question"><span slot="heading">Frame a question</span>Make a complex problem easier to discuss. Leave with a shared question and a short list of assumptions.<span slot="price">By arrangement</span></ServiceOffer>
+<ServiceOffer class="offer" headingId="decision"><span slot="heading">Make a decision</span>Compare realistic options against explicit constraints. Leave with a decision and the reasoning behind it.<span slot="price">By arrangement</span></ServiceOffer>
+<ServiceOffer class="offer" headingId="experiment"><span slot="heading">Plan an experiment</span>Turn an uncertain idea into a bounded test. Leave with a measure of progress and a clear stopping point.<span slot="price">By arrangement</span></ServiceOffer>
+</ServiceColumns><p class="package-details">Choose a format together. Preparation, timing, and follow-up are agreed before a session begins.</p><Action href="/contact/">Discuss a workshop</Action></ServicePage></Site>

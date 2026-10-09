@@ -1,0 +1,2 @@
+import type {APIContext} from 'astro';
+export function GET({site}:APIContext){const origin=site?.origin??'https://clear-current.example';const routes=['/','/workshops/','/project-support/','/contact/'];return new Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+routes.map(route=>'<url><loc>'+origin+route+'</loc></url>').join('')+'</urlset>',{headers:{'Content-Type':'application/xml; charset=utf-8'}});}

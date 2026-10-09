@@ -1,0 +1,5 @@
+---
+interface Props { href: string; class?: string; }
+const { href, class: className } = Astro.props;
+---
+<a class:list={['cta', className]} href={href}><slot/><span aria-hidden="true">&rarr;</span></a>
