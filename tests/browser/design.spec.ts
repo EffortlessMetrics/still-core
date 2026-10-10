@@ -52,7 +52,7 @@ test('keyboard navigation and preview metadata work through the public compositi
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
   await page.keyboard.press('Enter');
-  expect(new URL(page.url()).hash).toBe('#main');
+  await expect.poll(() => new URL(page.url()).hash).toBe('#main');
   await expect(page.locator('main')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Explore workshops' })).toBeFocused();
