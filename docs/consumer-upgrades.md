@@ -9,14 +9,14 @@ As checked on 2026-10-10, npm exposes only `@effortlessmetrics/still@0.1.0`. The
 Use Node `>=24.19.0 <25`. Node 24.19.x and Astro **7.3.5** are qualified; the declared `^7.3.5` peer range is broader than the tested version. Copy the accepted archive into your application's `vendor/` directory. For npm:
 
 ```sh
-npm install ./vendor/effortlessmetrics-still-0.2.1.tgz astro@7.3.5 --ignore-scripts
+npm install ./vendor/effortlessmetrics-still-0.2.1.tgz astro@7.3.5 --save-exact --ignore-scripts
 npm ci --ignore-scripts
 ```
 
 For an existing pnpm consumer:
 
 ```sh
-pnpm add ./vendor/effortlessmetrics-still-0.2.1.tgz astro@7.3.5
+pnpm add ./vendor/effortlessmetrics-still-0.2.1.tgz astro@7.3.5 --save-exact
 pnpm install --frozen-lockfile --ignore-scripts
 ```
 
