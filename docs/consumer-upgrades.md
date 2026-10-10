@@ -16,7 +16,7 @@ npm ci --ignore-scripts
 For an existing pnpm consumer:
 
 ```sh
-pnpm add ./vendor/effortlessmetrics-still-0.2.1.tgz astro@7.3.5 --save-exact
+pnpm add ./vendor/effortlessmetrics-still-0.2.1.tgz astro@7.3.5 --save-exact --ignore-scripts
 pnpm install --frozen-lockfile --ignore-scripts
 ```
 
