@@ -29,3 +29,12 @@ jobs:
       - run: npm run test:browser
       - run: npm run verify:packed -- --export "$RUNNER_TEMP/still-starter-delivery"
       - run: npm run verify:upgrade
+      - name: Retain qualified neutral starter delivery
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: still-starter-delivery-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/still-starter-delivery
+          if-no-files-found: error
+          retention-days: 30
+          # The allowlisted export's only hidden file is its generated .gitignore.
+          include-hidden-files: true
