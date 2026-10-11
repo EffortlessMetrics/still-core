@@ -21,3 +21,5 @@ Starter exporters set the generated application package to `UNLICENSED` and move
 ## Consumer upgrades
 
 For exact archive installation, compatibility checks and browser-worker rollback limits, see [upgrade an existing consumer](docs/consumer-upgrades.md).
+
+Run `npm run verify:upgrade` for the producer-owned [actual thin-starter upgrade proof](docs/thin-starter-upgrade-proof.md). It authenticates the frozen public starter, qualifies historical public Still 0.2.0 and freshly packed 0.2.1 in isolated consumers, and verifies unchanged source, runtime exports, emitted bytes, browser geometry, offline reading/reconnect and intent prefetch. CI runs this in addition to the historical exporter qualification.

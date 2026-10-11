@@ -55,6 +55,7 @@ try {
     console.log('Portable starter exported: run npm ci, npm run check and npm run build in its consumer directory.');
   }
   console.log(JSON.stringify({ version: installed.version, files: expected, sha256: createHash('sha256').update(await readFile(archive)).digest('hex'), isolatedInstall: 'passed', lockedReinstall: 'passed', types: 'passed', build: 'passed', browser: 'passed' }, null, 2));
+  console.log('Historical exporter qualified. Run npm run verify:upgrade for the authenticated actual thin-starter offline/prefetch upgrade proof.');
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

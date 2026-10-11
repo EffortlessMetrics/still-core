@@ -11,6 +11,7 @@
   "docs/design.md",
   "docs/historical-producer.md",
   "docs/release.md",
+  "docs/thin-starter-upgrade-proof.md",
   "package-lock.json",
   "package.json",
   "packages/still/CHANGELOG.md",
@@ -36,8 +37,11 @@
   "scripts/audit-boundary.mjs",
   "scripts/create-starter.mjs",
   "scripts/scope-starter-license.mjs",
+  "scripts/serve-thin-upgrade.mjs",
+  "scripts/upgrade-fixture.mjs",
   "scripts/verify-packed.mjs",
   "scripts/verify-starter-paths.mjs",
+  "scripts/verify-thin-upgrade.mjs",
   "source-files.json",
   "starter/LICENSE",
   "starter/LICENSE-APACHE",
@@ -62,5 +66,9 @@
   "starter/src/styles/starter.css",
   "starter/tsconfig.json",
   "tests/browser/design.spec.ts",
-  "tests/contracts.test.mjs"
+  "tests/contracts.test.mjs",
+  "tests/fixtures/thin-upgrade/PROVENANCE.json",
+  "tests/fixtures/thin-upgrade/starter-source.tar.gz",
+  "tests/fixtures/thin-upgrade/still-0.2.0.tar.gz",
+  "tests/upgrade-fixture.test.mjs"
 ]

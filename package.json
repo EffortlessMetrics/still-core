@@ -9,10 +9,11 @@
   "scripts": {
     "build": "npm run build --workspace starter",
     "check": "npm run check --workspace starter && node scripts/audit-boundary.mjs",
-    "test": "node --test tests/contracts.test.mjs",
+    "test": "node --test tests/*.test.mjs",
     "test:browser": "playwright test",
     "pack:still": "npm pack --workspace @effortlessmetrics/still --ignore-scripts",
     "verify:packed": "node scripts/verify-packed.mjs",
+    "verify:upgrade": "node scripts/verify-thin-upgrade.mjs",
     "starter:export": "node scripts/create-starter.mjs"
   },
   "devDependencies": {
