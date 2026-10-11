@@ -1,9 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { authenticateFixture, authenticateArchive, assertUpgradeScope, fixture } from '../scripts/upgrade-fixture.mjs';
+
+test('source boundary rejects an allowlisted fixture archive without provenance', async () => {
+  const root = path.resolve(fixture, '../../..');
+  const allowed = JSON.parse(await readFile(path.join(root, 'source-files.json'), 'utf8'));
+  const temporary = await mkdtemp(path.join(tmpdir(), 'still-boundary-negative-'));
+  try {
+    for (const relative of allowed) {
+      const target = path.join(temporary, relative);
+      await mkdir(path.dirname(target), { recursive: true });
+      await copyFile(path.join(root, relative), target);
+    }
+    const audit = () => spawnSync(process.execPath, ['scripts/audit-boundary.mjs'], { cwd: temporary, encoding: 'utf8' });
+    const baseline = audit();
+    assert.equal(baseline.status, 0, baseline.stderr);
+    const extraArchive = 'tests/fixtures/thin-upgrade/unprovenanced.tar.gz';
+    await copyFile(path.join(fixture, 'still-0.2.0.tar.gz'), path.join(temporary, extraArchive));
+    await writeFile(path.join(temporary, 'source-files.json'), JSON.stringify([...allowed, extraArchive].sort()));
+    const result = audit();
+    assert.notEqual(result.status, 0, 'Allowlisting an archive must not bypass provenance authentication');
+    assert.match(result.stderr, /Unprovenanced upgrade fixture archive/);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
 
 test('frozen public source and recreated historical package authenticate independently', async () => {
   const provenance = await authenticateFixture();
