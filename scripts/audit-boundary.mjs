@@ -20,7 +20,7 @@ assert.deepEqual(await inventory(root), allowed, 'Source changes require explici
 const privateContent = /[A-Z]:\\(?:Users|Temp)\\|\/Users\/|\/home\/[^/]+\/|Sentinel_[a-f0-9]|libfile_[a-f0-9]|(?:api|secret)[_-]key\s*[:=]\s*["'][^"']+/i;
 for (const relative of allowed) {
   assert(!/(?:^|\/)\.env|(?:^|\/)\.git\//.test(relative), relative);
-  if (relative.endsWith('.ttf')) continue;
+  if (relative.endsWith('.ttf') || relative.startsWith('tests/fixtures/thin-upgrade/') && relative.endsWith('.tar.gz')) continue;
   const text = await readFile(path.join(root, relative), 'utf8');
   // This checker names forbidden patterns; its code is not consumer content.
   if (relative !== 'scripts/audit-boundary.mjs') assert(!privateContent.test(text), 'Private source material: ' + relative);
@@ -40,4 +40,11 @@ assert.equal(manifest.bugs.url, 'https://github.com/EffortlessMetrics/still-core
 assert(!('_from' in manifest) && !('_resolved' in manifest));
 assert.equal(manifest.license, 'MIT OR Apache-2.0');
 for (const relative of ['LICENSE-MIT','LICENSE-APACHE','packages/still/LICENSE-MIT','packages/still/LICENSE-APACHE']) assert((await readFile(path.join(root, relative), 'utf8')).length > 1000);
-console.log(JSON.stringify({sourceFiles: allowed.length, sourceAllowlist: 'passed', privateContent: 'passed', fontHashes: 'passed', metadata: 'passed'}));
+// Keep the Node/npm-only exporter independent of native tar tooling. The upgrade
+// verifier and contract tests additionally authenticate every archived member.
+const upgradeProvenance = JSON.parse(await readFile(path.join(root, 'tests/fixtures/thin-upgrade/PROVENANCE.json'), 'utf8'));
+for (const record of [upgradeProvenance.starter, upgradeProvenance.historicalStill]) {
+  const bytes = await readFile(path.join(root, 'tests/fixtures/thin-upgrade', record.archive));
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), record.sha256, 'Upgrade fixture archive: ' + record.archive);
+}
+console.log(JSON.stringify({sourceFiles: allowed.length, sourceAllowlist: 'passed', privateContent: 'passed', fontHashes: 'passed', metadata: 'passed', upgradeFixtureArchiveHashes: 'passed'}));
