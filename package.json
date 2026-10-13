@@ -13,6 +13,7 @@
     "test:browser": "playwright test",
     "pack:still": "npm pack --workspace @effortlessmetrics/still --ignore-scripts",
     "verify:packed": "node scripts/verify-packed.mjs",
+    "verify:contract": "node scripts/verify-minimal-consumer.mjs",
     "verify:upgrade": "node scripts/verify-thin-upgrade.mjs",
     "starter:export": "node scripts/create-starter.mjs"
   },

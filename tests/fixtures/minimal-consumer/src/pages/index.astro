@@ -1,0 +1,20 @@
+---
+import Layout from '@effortlessmetrics/still/layout';
+import Header from '@effortlessmetrics/still/header';
+import Footer from '@effortlessmetrics/still/footer';
+import Page from '@effortlessmetrics/still/page';
+import Opening from '@effortlessmetrics/still/opening';
+import Section from '@effortlessmetrics/still/section';
+import OfferGrid from '@effortlessmetrics/still/offer-grid';
+import Offer from '@effortlessmetrics/still/offer';
+import Action from '@effortlessmetrics/still/action';
+import '@effortlessmetrics/still/styles.css';
+---
+<Layout title="Independent contract" description="Minimal package consumer" origin="https://example.invalid" mainId="reader" themeButtonId="contract-theme" faviconPath="/consumer.svg" production={false}>
+  <Header slot="header" brand="Consumer" themeButtonId="contract-theme" links={[{ label: 'Services', href: '/services/' }]} />
+  <Page id="reader" compact>
+    <Opening><h1>Independent contract</h1><p>Consumer-owned copy.</p></Opening>
+    <Section id="offers" label="Offers"><OfferGrid><Offer><h2>Consumer offer</h2><Action href="/services/">Read services</Action></Offer></OfferGrid></Section>
+  </Page>
+  <Footer slot="footer" label="Consumer footer"><span>Consumer-owned footer.</span></Footer>
+</Layout>

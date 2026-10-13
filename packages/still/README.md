@@ -19,7 +19,7 @@ Version 0.2.1 is an unpublished relocation candidate. The package is Astro sourc
 | `/action` | Call-to-action link; href and label slot, decorative arrow. |
 | `/service-page` | Main element with service-page spacing and width. |
 | `/service-columns` | Aligned service columns; columns is 2 or 3. |
-| `/service-offer` | Service article with headingId; heading, description and price slots. Slots accept consumer text without inventing offers or prices. |
+| `/service-offer` | Service article with headingId; named heading and price slots, and the default slot for description. The component supplies the heading element and its headingId; pass heading text rather than another heading element. Slots accept consumer text without inventing offers or prices. |
 | `/styles.css` | Full light/dark tokens, typography, widths, focus, cards, columns, actions and responsive layout. |
 | `/package.json` | Package metadata. |
 
