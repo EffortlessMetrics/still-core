@@ -28,7 +28,9 @@ The old `/layout` import remains. Compared with published 0.1.0, the expanded 0.
 
 Demonstrate a dependency-and-lock-only upgrade in an isolated consumer. Check all used imports, responsive layout, theme, keyboard navigation, landmarks/skip links and your consumer-owned contact behavior. The package contains no fonts or offline worker. Preserve the starter's separate OFL font notices if using its fonts.
 
-Offline and native intent prefetch in the branded starter come from independent libraries. Upgrading Still does not automatically upgrade AstroMache or offline. `astromache/static-offline` requires its optional offline peer; other AstroMache component imports do not. Offline 0.1.4 is currently an exact archive dependency, not a public registry release. See the [AstroMache consumer guide](https://github.com/EffortlessMetrics/astromache-core/blob/main/docs/consumer-upgrades.md) before changing those pins.
+Offline and native intent prefetch in the branded starter come from independent libraries. Upgrading Still does not automatically upgrade AstroMache or offline. `astromache/static-offline` requires its optional offline peer; other AstroMache component imports do not. The current branded starter independently adopts the qualified offline 0.1.5 archive for explicit index-document aliases; that adoption is not a registry release or a Still component version bump. Follow the starter's [active delivery and upgrade checks](https://github.com/EffortlessMetrics/still/blob/main/UPGRADING.md) and the [AstroMache consumer guide](https://github.com/EffortlessMetrics/astromache-core/blob/main/docs/consumer-upgrades.md) before changing those pins.
+
+Core's authenticated thin-starter upgrade fixture intentionally retains its historical source and offline 0.1.4 bytes. It proves the recorded Still 0.2.0-to-0.2.1 relocation against that frozen consumer; it does not certify a later starter or independently adopt offline updates. Preserve that fixture's provenance and qualify each current consumer against its own exact archives, content and worker policy.
 
 ## Cache transitions, rollback and licensing
 
