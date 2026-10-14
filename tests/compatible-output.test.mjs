@@ -10,6 +10,7 @@ test('stylesheet URL normalization preserves unrelated HTML and asset evidence',
   try {
     async function output(name, css, html, svg) {
       const directory = path.join(temporary, name);
+      await rm(directory, { recursive: true, force: true });
       await mkdir(path.join(directory, '_astro'), { recursive: true });
       await writeFile(path.join(directory, '_astro', css), 'body{}');
       await writeFile(path.join(directory, 'index.html'), `<link rel="stylesheet" href="/_astro/${css}">${html}`);
@@ -20,6 +21,12 @@ test('stylesheet URL normalization preserves unrelated HTML and asset evidence',
     assert.deepEqual(await output('css-upgrade', 'styles.new.css', '<h1>Consumer</h1>', '<svg/>'), baseline);
     assert.notDeepEqual(await output('bad-content', 'styles.new.css', '<h1>Replacement</h1>', '<svg/>'), baseline);
     assert.notDeepEqual(await output('bad-asset', 'styles.new.css', '<h1>Consumer</h1>', '<svg id="replacement"/>'), baseline);
+    const filenameContent = await output('filename-baseline', 'styles.old.css', '<p>_astro/styles.old.css</p>', '<svg/>');
+    assert.notDeepEqual(await output('filename-content', 'styles.new.css', '<p>_astro/styles.new.css</p>', '<svg/>'), filenameContent);
+    const filenameRuntime = await output('runtime-baseline', 'styles.old.css', '<script>const asset="_astro/styles.old.css";</script>', '<svg/>');
+    assert.notDeepEqual(await output('filename-runtime', 'styles.new.css', '<script>const asset="_astro/styles.new.css";</script>', '<svg/>'), filenameRuntime);
+    const inlineLink = await output('inline-link-baseline', 'styles.old.css', '<script>const markup=\'<link rel="stylesheet" href="/_astro/styles.old.css">\';</script>', '<svg/>');
+    assert.notDeepEqual(await output('inline-link-runtime', 'styles.new.css', '<script>const markup=\'<link rel="stylesheet" href="/_astro/styles.new.css">\';</script>', '<svg/>'), inlineLink);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 
@@ -28,8 +35,9 @@ test('worker receipts authenticate exact corpus bytes and normalized policy stay
   try {
     const { createHash } = await import('node:crypto');
     const digest = bytes => createHash('sha256').update(bytes).digest('hex');
-    async function output(name, css, cssBody, policy = 'network-first', corrupt = false) {
+    async function output(name, css, cssBody, policy = { navigationStrategy: 'network-first' }, corrupt = false, runtime = '', corruptEntries = false) {
       const directory = path.join(temporary, name);
+      await rm(directory, { recursive: true, force: true });
       await mkdir(path.join(directory, '_astro'), { recursive: true });
       const html = `<link rel="stylesheet" href="/_astro/${css}"><h1>Consumer</h1>`;
       await writeFile(path.join(directory, '_astro', css), cssBody);
@@ -39,12 +47,26 @@ test('worker receipts authenticate exact corpus bytes and normalized policy stay
       const revision = (name === 'baseline' ? 'a' : 'b').repeat(20);
       const receipt = { revision, resources: 2, files: 2, bytes: Buffer.byteLength(html) + Buffer.byteLength(cssBody) + (corrupt ? 1 : 0), urls, largestHtmlBytes: Buffer.byteLength(html), workbox: '7.4.1' };
       await writeFile(path.join(directory, 'offline-receipt.json'), JSON.stringify(receipt));
-      await writeFile(path.join(directory, 'reading-worker.js'), `const REVISION=${JSON.stringify(revision)};const URLS=${JSON.stringify(urls)};const DIGESTS=${JSON.stringify(digests)};\ninstallWorker(${JSON.stringify(policy)});`);
+      const entries = Object.entries(digests).map(([url, digest]) => ({ url, digest }));
+      if (corruptEntries) entries[0].digest = '0'.repeat(64);
+      const policyValue = typeof policy === 'function' ? policy(revision, digests) : policy;
+      const runtimeValue = typeof runtime === 'function' ? runtime(revision, digests) : runtime;
+      await writeFile(path.join(directory, 'reading-worker.js'), `const REVISION=${JSON.stringify(revision)};const URLS=${JSON.stringify(urls)};const DIGESTS=${JSON.stringify(digests)};\n${runtimeValue}\nOfflineRuntime.installWorker(${JSON.stringify(policyValue)},${JSON.stringify(entries)},REVISION,PREFIX);`);
       return compatibleOutput(directory, { worker: true });
     }
     const baseline = await output('baseline', 'styles.old.css', 'body{}');
     assert.deepEqual(await output('upgrade', 'styles.new.css', 'body{}.service-dividers{}'), baseline);
-    assert.notDeepEqual(await output('bad-policy', 'styles.new.css', 'body{}.service-dividers{}', 'cache-first'), baseline);
-    await assert.rejects(output('bad-receipt', 'styles.new.css', 'body{}', 'network-first', true), /Receipt byte total/);
+    assert.notDeepEqual(await output('bad-policy', 'styles.new.css', 'body{}.service-dividers{}', { navigationStrategy: 'cache-first' }), baseline);
+    await assert.rejects(output('bad-receipt', 'styles.new.css', 'body{}', { navigationStrategy: 'network-first' }, true), /Receipt byte total/);
+    const revisionPolicy = revision => ({ navigationFallback: '/' + revision });
+    const revisionBaseline = await output('baseline', 'styles.old.css', 'body{}', revisionPolicy);
+    assert.notDeepEqual(await output('changed-revision-policy', 'styles.new.css', 'body{}', revisionPolicy), revisionBaseline);
+    const digestPolicy = (revision, digests) => ({ navigationFallback: '/' + digests['/'] });
+    const digestBaseline = await output('baseline', 'styles.old.css', 'body{}', digestPolicy);
+    assert.notDeepEqual(await output('changed-digest-policy', 'styles.new.css', 'body{}', digestPolicy), digestBaseline);
+    const runtimeRevision = revision => `const unrelated=\"${revision}\";`;
+    const runtimeBaseline = await output('baseline', 'styles.old.css', 'body{}', undefined, false, runtimeRevision);
+    assert.notDeepEqual(await output('changed-runtime', 'styles.new.css', 'body{}', undefined, false, runtimeRevision), runtimeBaseline);
+    await assert.rejects(output('bad-runtime-entries', 'styles.new.css', 'body{}', undefined, false, '', true), /Runtime entries must equal/);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
