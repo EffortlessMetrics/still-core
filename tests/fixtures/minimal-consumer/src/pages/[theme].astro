@@ -1,0 +1,19 @@
+---
+import Layout from '@effortlessmetrics/still/layout';
+import Header from '@effortlessmetrics/still/header';
+import '@effortlessmetrics/still/styles.css';
+export function getStaticPaths() {
+  return [
+    { params: { theme: 'theme-default' }, props: { storageProps: {} } },
+    { params: { theme: 'theme-undefined' }, props: { storageProps: { themeStorageKey: undefined } } },
+    { params: { theme: 'theme-custom' }, props: { storageProps: { themeStorageKey: 'consumer-theme' } } },
+    { params: { theme: 'theme-empty' }, props: { storageProps: { themeStorageKey: '' } } },
+  ];
+}
+interface Props { storageProps: { themeStorageKey?: string }; }
+const { storageProps } = Astro.props;
+---
+<Layout title="Theme configuration" description="Independent optional configuration" origin="https://example.invalid" faviconPath="/consumer.svg" {...storageProps}>
+  <Header slot="header" brand="Consumer" />
+  <main id="main">Consumer theme configuration</main>
+</Layout>

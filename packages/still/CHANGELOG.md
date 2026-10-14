@@ -1,6 +1,6 @@
 # 0.2.2 (unpublished)
 
-Add opt-in static `service-dividers` styling for ServiceColumns, preserving plain columns and optional offer cards. Keep existing component exports and prop contracts.
+Add opt-in static `service-dividers` styling for ServiceColumns, preserving plain columns and optional offer cards. Keep existing component exports and prop contracts. Preserve an explicitly empty `themeStorageKey` on writes so theme selection survives reload; omitted and custom keys retain their behavior.
 
 # 0.2.1 (unpublished)
 
