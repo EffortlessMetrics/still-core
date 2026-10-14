@@ -2,9 +2,9 @@
 
 For a small new consumer without installing producer tooling, run `node scripts/create-starter.mjs ../new-site`. It creates a standalone directory with its own vendor archive and frozen npm lockfile. `verify:packed` now qualifies this same exporter in CI, including the relocated delivery. Existing historical ZIPs keep their original sibling-archive structure and hashes.
 
-Version 0.2.1 is an unpublished relocation candidate. These steps prepare and validate bytes; they do not publish them.
+Version 0.2.2 is an unpublished optional-divider candidate. Retained 0.2.1 archives remain immutable. These steps prepare and validate bytes; they do not publish them.
 
-1. Use the supported Node version and run `npm ci`, `npm run check`, `npm test`, `npm run build` and `npm run test:browser`.
+1. Use the supported Node version and run `npm ci`, `npm run check`, `npm test`, `npm run build`, `npm run test:browser`, `npm run verify:contract` and `npm run verify:upgrade`.
 2. Run `npm run verify:packed -- --export <new-directory>`. It packs only the reviewed package allowlist, copies the complete neutral starter into an isolated temporary consumer, installs the archive, repeats a locked install, checks types, builds all pages and runs the functional browser suite against those installed bytes. It also reinstalls and qualifies the retained portable delivery. Its `consumer/STARTER-DELIVERY.json` records the archive pin and SHA256; the verifier log records the reviewed archive file inventory. Without `--export`, the temporary consumer and its receipt are removed afterwards.
 3. Retain the exact `consumer/vendor/` archive named by that receipt, together with the receipt, manifest, lockfile and notices. Record its SHA256, source commit and successful CI run. Compare the retained archive's SHA256 with the receipt; a newly packed archive with a different hash is a separate candidate and requires its own qualification.
 4. Review package metadata, exported components, compatibility notes and every changed file. Consumer content, private assets, installed manifest metadata and source paths must remain outside the package. The runtime package has no fonts; the starter keeps separate font licenses.

@@ -1,6 +1,6 @@
 {
   "name": "@effortlessmetrics/still",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Readable Astro service-site design, components and page composition.",
   "type": "module",
   "license": "MIT OR Apache-2.0",

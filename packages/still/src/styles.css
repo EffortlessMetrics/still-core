@@ -416,3 +416,35 @@ h1, h2, h3 { overflow-wrap: anywhere; }
 .github-link { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; }
 .github-link svg { width: 24px; height: 24px; fill: currentColor; transform: scale(1.1); }
 @media (max-width: 760px) { .github-link svg { transform: scale(1.25); } }
+
+/* Optional editorial separators: whitespace carries the layout. */
+.service-dividers { column-gap: 72px; }
+.service-dividers > .package-column { position: relative; }
+.service-dividers > .package-column + .package-column::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -36px;
+  width: 2px;
+  pointer-events: none;
+  background-image: radial-gradient(circle, var(--accent) 0.75px, transparent 1px);
+  background-size: 2px 8px;
+  background-repeat: repeat-y;
+  opacity: 0.10;
+  mask-image: linear-gradient(to bottom, transparent, #000 50%, transparent);
+}
+@media (max-width: 760px) {
+  .service-dividers > .package-column:not(:last-child) { margin-bottom: 48px; }
+  .service-dividers > .package-column + .package-column::before {
+    top: -24px;
+    bottom: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: 2px;
+    background-size: 8px 2px;
+    background-repeat: repeat-x;
+    mask-image: linear-gradient(to right, transparent, #000 50%, transparent);
+  }
+}

@@ -45,7 +45,7 @@ try {
   if (exportPath) {
     for (const generated of ['node_modules', 'dist', '.astro']) await rm(path.join(consumer, generated), { recursive: true, force: true });
     await cp(temporary, path.resolve(exportPath), { recursive: true, force: false, errorOnExist: true });
-    await writeFile(path.join(path.resolve(exportPath), 'README.md'), '# Still standalone starter candidate\n\nThe consumer directory contains its exact vendor archive, manifest and lockfile. Keep them together. With Node 24.19 within major 24, enter consumer and run npm ci, npm run check, npm run build and npm run dev. No registry release of Still 0.2.1 is required. This complete neutral starter defaults to noindex and a disabled contact form; review its configuration and content before any separately authorized deployment.\n');
+    await writeFile(path.join(path.resolve(exportPath), 'README.md'), '# Still standalone starter candidate\n\nThe consumer directory contains its exact vendor archive, manifest and lockfile. Keep them together. With Node 24.19 within major 24, enter consumer and run npm ci, npm run check, npm run build and npm run dev. No registry release of this exact Still candidate is required. This complete neutral starter defaults to noindex and a disabled contact form; review its configuration and content before any separately authorized deployment.\n');
     const exportedConsumer = path.join(path.resolve(exportPath), 'consumer');
     run(npm, ['ci', '--no-audit', '--no-fund'], exportedConsumer);
     run(npm, ['run', 'check'], exportedConsumer);
