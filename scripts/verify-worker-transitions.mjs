@@ -102,7 +102,15 @@ try {
   async function controlled(context) {
     const page = await context.newPage();
     await page.goto(origin);
-    await page.evaluate(async () => { await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }); await navigator.serviceWorker.ready; });
+    await page.evaluate(async () => {
+      let timer;
+      try {
+        await Promise.race([
+          (async () => { await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }); await navigator.serviceWorker.ready; })(),
+          new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Initial worker readiness timed out after 10000ms')), 10000); }),
+        ]);
+      } finally { clearTimeout(timer); }
+    });
     await page.reload();
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     return page;
@@ -128,6 +136,18 @@ try {
     const b = await generateOfflineWorker(path.join(temporary, 'B'), selected);
     assert.notEqual(a.revision, b.revision);
     serving = 'A';
+    if (reports.length === 1) {
+      const failedInitial = await browser.newContext();
+      mixed = true;
+      try {
+        await assert.rejects(controlled(failedInitial), /Initial worker readiness timed out after 10000ms/, 'Rejected first install must terminate with a descriptive failure');
+        const reg = await failedInitial.pages()[0].evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return { active: Boolean(r?.active), installing: Boolean(r?.installing), caches: await caches.keys() }; });
+        assert.equal(reg.active, false);
+        assert.equal(reg.installing, false);
+        assert(!reg.caches.some(name => name.startsWith('still-transition-')));
+        reports.push({ rejectedFirstInstall: 'bounded failure confirmed', activeWorker: false, ownedCaches: 0 });
+      } finally { mixed = false; await failedInitial.close(); }
+    }
     const context = await browser.newContext();
     try {
       page = await controlled(context);
