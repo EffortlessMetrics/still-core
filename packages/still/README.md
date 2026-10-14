@@ -23,7 +23,7 @@ Version 0.2.2 is an unpublished optional-divider candidate. The package is Astro
 | `/styles.css` | Full light/dark tokens, typography, widths, focus, cards, columns, actions and responsive layout. |
 | `/package.json` | Package metadata. |
 
-Composition components accept an optional class. Keep the main id consistent with the layout's skip-link mainId. A custom theme button id must be identical in Header and Layout; the stable theme-button class retains a 48px target regardless of that id. Theme preference is read before paint, guarded against unavailable storage, synchronized with system preference and persisted under the configurable key. No tracking or vendor request is involved.
+Composition components accept an optional class. Keep the main id consistent with the layout's skip-link mainId. A custom theme button id must be identical in Header and Layout; the stable theme-button class retains a 48px target regardless of that id. Theme preference is read before paint, guarded against unavailable storage, synchronized with system preference and persisted under the configurable key, including an explicitly empty string. Omitting the key or passing undefined retains `site-theme`. No tracking or vendor request is involved.
 
 The default body type is 22px with 1.65 line height; mobile preserves that reading size. Desktop content width and spacing keep a short home naturally compact without fixed-height clipping. Service columns share heading/description/price rows and stack below 760px. Consumers can override the documented CSS properties `--bg`, `--text`, `--accent`, `--surface`, `--muted`, `--line`, `--field-border`, `--tint` and `--band` in their own stylesheet. Fonts and icon treatments remain consumer choices.
 

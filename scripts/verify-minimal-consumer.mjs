@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, copyFile, cp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { chromium } from '@playwright/test';
 import { assertPropRejections } from './minimal-consumer-contract.mjs';
 import { compatibleOutput } from './compatible-output.mjs';
+import { layoutReferenceOutput } from './layout-runtime-delta.mjs';
+import { themeConfiguration } from './layout-theme-browser.mjs';
 import { authenticateArchive, fixture, root, stillName, sha256, json, run, snapshot } from './upgrade-fixture.mjs';
 
 // This consumer is authored independently; no starter source or adapter is copied.
@@ -89,7 +91,7 @@ async function dividerContract(browser, base, supportsDividers) {
   return geometry;
 }
 
-async function browserContract(supportsDividers) {
+async function browserContract(supportsDividers, themeStorageFixed) {
   const dist = path.join(consumer, 'dist');
   const server = createServer(async (request, response) => {
     try {
@@ -112,6 +114,7 @@ async function browserContract(supportsDividers) {
     page.on('requestfailed', request => failures.push(request.url()));
     page.on('response', response => { if (!response.ok()) failures.push(`${response.status()} ${response.url()}`); });
     const base = `http://127.0.0.1:${server.address().port}`;
+    const themeKeys = await themeConfiguration(browser, base, themeStorageFixed);
     await page.goto(base + '/', { waitUntil: 'networkidle' });
     assert.equal(await page.locator('main').getAttribute('id'), 'reader');
     assert.equal(await page.locator('body').evaluate(element => getComputedStyle(element).fontSize), '22px');
@@ -130,14 +133,14 @@ async function browserContract(supportsDividers) {
     assert.equal(await page.locator('.package-column > p').first().textContent(), 'Consumer description');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.deepEqual(failures, [], 'Consumer asset and runtime requests must succeed');
-    return { browserVersion: browser.version(), defaultGeometry: await dividerContract(browser, base, supportsDividers) };
+    return { themeKeys, browserVersion: browser.version(), defaultGeometry: await dividerContract(browser, base, supportsDividers) };
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
   }
 }
 
-async function qualify(version, archive, expectedFiles, supportsDividers) {
+async function qualify(version, archive, expectedFiles, supportsDividers, themeStorageFixed = false) {
   const frozen = await snapshot(consumer);
   run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
   const installed = path.join(consumer, 'node_modules', stillName);
@@ -166,7 +169,7 @@ async function qualify(version, archive, expectedFiles, supportsDividers) {
     console.log(`Rejected invalid props on all 12 installed components (${version}).`);
   } finally { await rm(negative, { recursive: true, force: true }); }
   run('npm', ['run', 'build'], consumer);
-  const browserReport = await browserContract(supportsDividers);
+  const browserReport = await browserContract(supportsDividers, themeStorageFixed);
   assert.deepEqual(await snapshot(consumer), frozen, 'Qualification must preserve consumer source, pins and lock');
   return { version, archiveSha256: sha256(await readFile(archive)), output: await compatibleOutput(path.join(consumer, 'dist')), install: 'passed', exports: 'passed', payload: 'passed', validTypes: 'passed', invalidTypes: 'passed', browserAssetsRuntime: 'passed', dividers: supportsDividers ? 'passed' : 'missing control confirmed', ...browserReport };
 }
@@ -199,9 +202,12 @@ try {
   assert.deepEqual(Object.keys(after).filter(file => !(file in before)), [current]);
   const currentFiles = {};
   for (const file of expected) currentFiles[file] = sha256(await readFile(path.join(root, 'packages/still', file)));
-  const candidate = await qualify(packed.version, path.join(consumer, current), currentFiles, true);
-  assert.deepEqual(candidate.output, baseline.output, 'Only bundled CSS bytes and their exact HTML URLs may change');
+  const candidate = await qualify(packed.version, path.join(consumer, current), currentFiles, true, true);
+  const historicalLayout = execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/src/Layout.astro']);
+  const reference = await layoutReferenceOutput(consumer, historicalLayout);
+  assert.notDeepEqual(candidate.output, reference.output, 'Production runtime delta must remain visible in output evidence');
+  assert.deepEqual(reference.output, baseline.output, 'Only bundled CSS bytes and their exact HTML URLs may change');
   assert.deepEqual(candidate.defaultGeometry, baseline.defaultGeometry, 'Default columns, cards, footer, actions and prices remain unchanged');
   for (const report of [baseline, candidate]) { report.defaultGeometrySha256 = sha256(Buffer.from(JSON.stringify(report.defaultGeometry))); delete report.defaultGeometry; }
-  console.log(JSON.stringify({ sourceCommit: run('git', ['rev-parse', 'HEAD'], root, process.env, true).trim(), node: process.version, browser: process.env.STILL_BROWSER_EXECUTABLE || 'Playwright bundled Chromium', baseline, candidate, dependencyLockOnlyUpgrade: 'passed', stylesheetOnlyOutputChange: 'passed', defaultCompositionParity: 'passed' }, null, 2));
+  console.log(JSON.stringify({ sourceCommit: run('git', ['rev-parse', 'HEAD'], root, process.env, true).trim(), node: process.version, browser: process.env.STILL_BROWSER_EXECUTABLE || 'Playwright bundled Chromium', baseline, candidate, layoutRuntimeDelta: reference.source, productionOutputRestoration: 'passed', dependencyLockOnlyUpgrade: 'passed', historicalLayoutStylesheetOnlyOutputChange: 'passed', defaultCompositionParity: 'passed' }, null, 2));
 } finally { await rm(temporary, { recursive: true, force: true }); }
