@@ -1,0 +1,19 @@
+# Packed consumer worker transitions
+
+Still owns components and CSS. `EffortlessMetrics/astro-offline` owns the worker; the branded starter owns its delivery pins and policy. Core's historical thin-upgrade fixture remains offline 0.1.4 and is immutable. Component PR9/12 do not update that worker. The current starter's offline 0.1.5 delivery includes the independent producer's explicit index-document fix.
+
+Use the opt-in focused proof with a retained offline archive and its accepted receipt digest:
+
+```sh
+npm run verify:workers -- --offline-archive /absolute/path/effortlessmetrics-astro-offline-0.1.5.tgz --offline-sha256 e8cb8779d076896e437fb309a5c3ce2d15d5620a1e1d0508d614ff6f09d17a06
+```
+
+Use Node 24.19.x and the declared Playwright dependency. `STILL_BROWSER_EXECUTABLE` optionally selects an installed Chromium; the report records its actual version. Set process-local npm/cache/telemetry variables as needed. This proof installs official archive-declared dependencies, performs a frozen reinstall, authenticates installed Still/current-offline/historical-offline payloads and builds an independent Astro consumer from the freshly packed Still package. It does not use a producer workspace link, import branded consumer source, alter fixture archives or adopt new dependency pins in the starter. It reports archive and worker hashes, source HEAD, runtime, origin and per-policy results. A passing run binds to the tested working tree as well as HEAD; commit before final qualification.
+
+One local origin serves two actual Astro builds. The historical 0.1.4 packed worker must serve `/article/` but return the offline fallback for `/article/index.html`. The current packed worker must serve the article and its relative asset through directory, slashless and explicit-index navigation. Independent contexts with service workers blocked prove current network B and removed-route 404, and fail offline; they cannot accidentally pass via the worker under test.
+
+The current worker runs all combinations of cache-first/network-first and query stripping enabled/disabled. Two controlled clients stay open during mixed-install rejection, successful replacement installation and reconnect. The draft survives. The active corpus and mutable resource URL remain revision-pinned, and every cached byte stays immutable. Network-first navigations serve current B and real removed-route 404s; intentional cache-first serves A until natural activation. Query-disabled offline navigation receives the configured fallback. Unsupported JS/CSS/image/JSON/font/text fetches, resource requests for navigation-only index aliases, and API fetches/navigations fail offline rather than receiving HTML fallback. Unknown document navigation receives the configured fallback.
+
+Only after both old clients close does B activate naturally. B's verified corpus serves the new article and relative asset, removed A routes fall back, every selected body matches generated SHA-256 metadata, A's owned cache disappears and an unrelated cache survives. The proof never calls skipWaiting, clears caches, unregisters workers or reloads held drafts.
+
+No new worker defect was observed in this matrix on the current accepted 0.1.5 archive. Preserve aggressive caching; mutable resource URLs intentionally retain their active-build bytes, and cache-first document freshness requires natural worker activation. Use versioned resource URLs when online documents require new resources. This proof does not establish hosted byte stability, multi-origin/scope behavior, claimClients=true, first-install lifecycle callbacks, rollback, browser engines beyond the reported Chromium, or current branded-starter acceptance. It is independent focused verification, not a release or deployment gate; it does not replace the existing frozen upgrade proof.
