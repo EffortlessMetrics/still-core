@@ -144,7 +144,7 @@ async function qualify(version, archive, expectedFiles, supportsDividers) {
   assert((await realpath(installed)).startsWith((await realpath(consumer)) + path.sep), 'No producer workspace link');
   const manifest = await json(path.join(installed, 'package.json'));
   assert.equal(manifest.version, version);
-  assert.deepEqual(manifest.exports, exports, 'Stable public export contract');
+  assert.deepEqual(Object.fromEntries(Object.entries(manifest.exports).map(([name, target]) => [name, typeof target === 'string' ? target : target.default])), exports, 'Stable public runtime export contract');
   assert.equal(manifest.dependencies, undefined, 'Astro is the only runtime peer; no hidden runtime dependencies');
   assert.deepEqual(manifest.peerDependencies, { astro: '^7.3.5' });
   assert.deepEqual(await snapshot(installed), expectedFiles, 'Exact installed payload and assets');

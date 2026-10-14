@@ -5,7 +5,14 @@ const manifest = JSON.parse(await readFile(new URL('../packages/still/package.js
 test('candidate exports the design and composition from reviewed source', async () => {
   assert.equal(manifest.version, '0.2.2');
   assert.equal(Object.keys(manifest.exports).length, 14);
-  for (const path of Object.values(manifest.exports)) await readFile(new URL('../packages/still/' + path, import.meta.url));
+  for (const entry of Object.values(manifest.exports)) {
+    for (const path of typeof entry === 'string' ? [entry] : Object.values(entry)) await readFile(new URL('../packages/still/' + path, import.meta.url));
+    if (typeof entry === 'string') continue;
+    assert.deepEqual(Object.keys(entry), ['types', 'default'], 'Types condition precedes runtime default');
+    const source = await readFile(new URL('../packages/still/' + entry.default, import.meta.url), 'utf8');
+    const declaration = await readFile(new URL('../packages/still/' + entry.types, import.meta.url), 'utf8');
+    assert.equal(declaration.match(/interface Props \{[^\n]*\}/)[0], source.match(/interface Props \{[^\n]*\}/)[0], 'Declaration props match component source');
+  }
   assert.equal(manifest.repository.url, 'git+https://github.com/EffortlessMetrics/still-core.git');
   assert.equal(manifest.homepage, 'https://github.com/EffortlessMetrics/still-core#readme');
   assert.equal(manifest.dependencies, undefined);

@@ -13,18 +13,54 @@
     "CHANGELOG.md"
   ],
   "exports": {
-    "./layout": "./src/Layout.astro",
-    "./header": "./src/Header.astro",
-    "./footer": "./src/Footer.astro",
-    "./page": "./src/Page.astro",
-    "./opening": "./src/Opening.astro",
-    "./section": "./src/Section.astro",
-    "./offer-grid": "./src/OfferGrid.astro",
-    "./offer": "./src/Offer.astro",
-    "./action": "./src/Action.astro",
-    "./service-page": "./src/ServicePage.astro",
-    "./service-columns": "./src/ServiceColumns.astro",
-    "./service-offer": "./src/ServiceOffer.astro",
+    "./layout": {
+      "types": "./src/Layout.d.ts",
+      "default": "./src/Layout.astro"
+    },
+    "./header": {
+      "types": "./src/Header.d.ts",
+      "default": "./src/Header.astro"
+    },
+    "./footer": {
+      "types": "./src/Footer.d.ts",
+      "default": "./src/Footer.astro"
+    },
+    "./page": {
+      "types": "./src/Page.d.ts",
+      "default": "./src/Page.astro"
+    },
+    "./opening": {
+      "types": "./src/Opening.d.ts",
+      "default": "./src/Opening.astro"
+    },
+    "./section": {
+      "types": "./src/Section.d.ts",
+      "default": "./src/Section.astro"
+    },
+    "./offer-grid": {
+      "types": "./src/OfferGrid.d.ts",
+      "default": "./src/OfferGrid.astro"
+    },
+    "./offer": {
+      "types": "./src/Offer.d.ts",
+      "default": "./src/Offer.astro"
+    },
+    "./action": {
+      "types": "./src/Action.d.ts",
+      "default": "./src/Action.astro"
+    },
+    "./service-page": {
+      "types": "./src/ServicePage.d.ts",
+      "default": "./src/ServicePage.astro"
+    },
+    "./service-columns": {
+      "types": "./src/ServiceColumns.d.ts",
+      "default": "./src/ServiceColumns.astro"
+    },
+    "./service-offer": {
+      "types": "./src/ServiceOffer.d.ts",
+      "default": "./src/ServiceOffer.astro"
+    },
     "./styles.css": "./src/styles.css",
     "./package.json": "./package.json"
   },
