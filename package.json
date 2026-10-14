@@ -15,7 +15,8 @@
     "verify:packed": "node scripts/verify-packed.mjs",
     "verify:contract": "node scripts/verify-minimal-consumer.mjs",
     "verify:upgrade": "node scripts/verify-thin-upgrade.mjs",
-    "starter:export": "node scripts/create-starter.mjs"
+    "starter:export": "node scripts/create-starter.mjs",
+    "verify:types": "node scripts/verify-component-types.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0"
