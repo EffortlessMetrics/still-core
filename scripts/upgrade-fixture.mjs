@@ -97,3 +97,9 @@ export async function verifyInstalled(consumer, name, expectedRecord) {
   }
   return { manifest: packedManifest, files, sha256: delivery.sha256, archive };
 }
+
+// Frozen 0.2.1 adds CHANGELOG.md to the 0.2.0 payload, but predates declarations.
+// Keep this inventory independent of later producer additions.
+export function frozenRelocationFiles(provenance) {
+  return [...Object.keys(provenance.historicalStill.files), 'CHANGELOG.md'].sort();
+}

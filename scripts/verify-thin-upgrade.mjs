@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, writeFile, copyFile, cp, rm } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { authenticateFixture, fixture, root, stillName, sha256, integrity, json, run, snapshot, assertUpgradeScope, verifyInstalled } from './upgrade-fixture.mjs';
+import { authenticateFixture, fixture, root, stillName, sha256, integrity, json, run, snapshot, assertUpgradeScope, verifyInstalled, frozenRelocationFiles } from './upgrade-fixture.mjs';
 import { compatibleOutput } from './compatible-output.mjs';
 
 const provenance = await authenticateFixture();
@@ -83,7 +83,7 @@ try {
   const relocationArchive = path.join(relocated, relocationFile);
   const relocationRecord = { sha256: sha256(await readFile(relocationArchive)), files: {} };
   assert.equal(relocationRecord.sha256, provenance.starter.files[relocationFile], 'Retained 0.2.1 archive is authenticated by frozen starter provenance');
-  for (const file of Object.keys(provenance.historicalStill.files)) relocationRecord.files[file] = sha256(execFileSync('tar', ['-xOf', relocationArchive, 'package/' + file]));
+  for (const file of frozenRelocationFiles(provenance)) relocationRecord.files[file] = sha256(execFileSync('tar', ['-xOf', relocationArchive, 'package/' + file]));
   const reports = [];
   for (const [name, consumer, record] of [['baseline', baseline, provenance.historicalStill], ['relocated', relocated, relocationRecord], ['candidate', candidate, candidateRecord]]) {
     const frozen = await snapshot(consumer);

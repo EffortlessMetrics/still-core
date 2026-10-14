@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { authenticateFixture, authenticateArchive, assertUpgradeScope, fixture } from '../scripts/upgrade-fixture.mjs';
+import { authenticateFixture, authenticateArchive, assertUpgradeScope, fixture, sha256, frozenRelocationFiles } from '../scripts/upgrade-fixture.mjs';
 
 test('source boundary rejects an allowlisted fixture archive without provenance', async () => {
   const root = path.resolve(fixture, '../../..');
@@ -69,4 +69,27 @@ test('upgrade rejects consumer content, configuration, notice changes and stray 
     assert.throws(() => assertUpgradeScope(before, missing, 'vendor/new.tgz'), /Only Still pin/);
   }
   assert.throws(() => assertUpgradeScope(before, { ...after, 'stray.txt': 'k' }, 'vendor/new.tgz'), /Only the new Still archive/);
+});
+
+test('frozen relocation authenticates its added changelog without current declarations', async () => {
+  const provenance = await authenticateFixture();
+  const temporary = await mkdtemp(path.join(tmpdir(), 'still-relocation-inventory-'));
+  try {
+    const relative = 'vendor/effortlessmetrics-still-0.2.1.tgz';
+    const archive = path.join(temporary, 'relocation.tgz');
+    const bytes = execFileSync('tar', ['-xOf', path.join(fixture, provenance.starter.archive), relative]);
+    assert.equal(sha256(bytes), provenance.starter.files[relative]);
+    await writeFile(archive, bytes);
+    const record = { sha256: provenance.starter.files[relative], files: {} };
+    for (const file of frozenRelocationFiles(provenance)) record.files[file] = sha256(execFileSync('tar', ['-xOf', archive, 'package/' + file]));
+    await authenticateArchive(archive, record, 'package/');
+    assert.deepEqual(Object.keys(record.files).filter(file => !(file in provenance.historicalStill.files)), ['CHANGELOG.md']);
+    assert.equal(Object.keys(record.files).some(file => file.endsWith('.d.ts')), false);
+    const missingChangelog = structuredClone(record);
+    delete missingChangelog.files['CHANGELOG.md'];
+    await assert.rejects(authenticateArchive(archive, missingChangelog, 'package/'), /Exact fixture inventory/);
+    const futureDeclaration = structuredClone(record);
+    futureDeclaration.files['src/Action.d.ts'] = '0'.repeat(64);
+    await assert.rejects(authenticateArchive(archive, futureDeclaration, 'package/'), /Exact fixture inventory/);
+  } finally { await rm(temporary, { recursive: true, force: true }); }
 });
