@@ -58,7 +58,7 @@ try {
   const source = path.join(consumer, 'src/pages');
   await rm(source, { recursive: true });
   await mkdir(source);
-  const policy = { cachePrefix: 'still-transition-', workerFile: 'sw.js', pages: ['/', '/article/', '/offline/'], globPatterns: ['_astro/*', 'mutable.svg', 'article/relative.js'], maxResources: 30, maxBytes: 1024 * 1024, worker: { navigationStrategy: 'network-first', navigationTimeoutMs: 150, navigationFallback: '/offline/', stripQuery: false } };
+  const policy = { cachePrefix: 'still-transition-', workerFile: 'sw.js', pages: ['/', '/article/', '/offline/'], globPatterns: ['_astro/*', 'build-*.js', 'mutable.svg', 'article/relative.js'], maxResources: 30, maxBytes: 1024 * 1024, worker: { navigationStrategy: 'network-first', navigationTimeoutMs: 150, navigationFallback: '/offline/', stripQuery: false } };
   // Same origin serves every corpus and policy variant. No preview process or live host.
   server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -78,7 +78,7 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch(process.env.STILL_BROWSER_EXECUTABLE ? { executablePath: process.env.STILL_BROWSER_EXECUTABLE } : {});
-  const layout = (version, route) => `---\nimport Layout from '@effortlessmetrics/still/layout';\nimport '@effortlessmetrics/still/styles.css';\n---\n<Layout title="${version}" description="Transition proof" origin="https://example.invalid"><main><h1>${route === 'offline' ? 'Offline' : version}</h1><textarea aria-label="Draft"></textarea></main>${route === 'article' ? '<script is:inline src="./relative.js"></script>' : ''}</Layout>`;
+  const layout = (version, route) => `---\nimport Layout from '@effortlessmetrics/still/layout';\nimport '@effortlessmetrics/still/styles.css';\n---\n<Layout title="${version}" description="Transition proof" origin="https://example.invalid"><main><h1>${route === 'offline' ? 'Offline' : version}</h1><textarea aria-label="Draft"></textarea></main><script is:inline src="/build-${version}.js"></script>${route === 'article' ? '<script is:inline src="./relative.js"></script>' : ''}</Layout>`;
   for (const version of ['A', 'B']) {
     for (const route of ['', 'article', 'offline', ...(version === 'A' ? ['removed'] : [])]) {
       const file = route ? path.join(source, route + '.astro') : path.join(source, 'index.astro');
@@ -87,6 +87,8 @@ try {
     if (version === 'B') await rm(path.join(source, 'removed.astro'));
     await mkdir(path.join(consumer, 'public/article'), { recursive: true });
     await writeFile(path.join(consumer, 'public/article/relative.js'), `window.relativeVersion=${JSON.stringify(version)};`);
+    if (version === 'B') await rm(path.join(consumer, 'public/build-A.js'));
+    await writeFile(path.join(consumer, `public/build-${version}.js`), `window.buildVersion=${JSON.stringify(version)};`);
     await writeFile(path.join(consumer, 'public/mutable.svg'), `<svg xmlns="http://www.w3.org/2000/svg"><title>${version}</title></svg>`);
     run('npm', ['run', 'build'], consumer);
     await cp(path.join(consumer, 'dist'), path.join(temporary, version), { recursive: true });
@@ -155,6 +157,7 @@ try {
       const response = await page.reload();
       assert.equal(await page.locator('h1').textContent(), navigationStrategy === 'network-first' ? 'B' : 'A');
       assert.equal(response.fromServiceWorker(), true);
+      assert.equal(await page.evaluate(() => window.buildVersion), navigationStrategy === 'network-first' ? 'B' : 'A', 'New versioned resource URLs pass through to the current network build');
       assert.match((await resource(page, '/mutable.svg')).body, /<title>A<\/title>/, 'Aggressive revision-pinned asset caching remains intact');
       const removed = await page.goto(origin + '/removed/');
       assert.equal(removed.status(), navigationStrategy === 'network-first' ? 404 : 200);
@@ -174,6 +177,7 @@ try {
         assert.equal(result.fromServiceWorker(), true);
         assert.equal(await page.locator('h1').textContent(), 'A');
         assert.equal(await page.evaluate(() => window.relativeVersion), 'A');
+        assert.equal(await page.evaluate(() => window.buildVersion), 'A');
       }
       await page.goto(origin + '/article/index.html?campaign=proof');
       assert.equal(await page.locator('h1').textContent(), stripQuery ? 'A' : 'Offline');
@@ -212,6 +216,7 @@ try {
       await page.goto(origin + '/article/index.html');
       assert.equal(await page.locator('h1').textContent(), 'B');
       assert.equal(await page.evaluate(() => window.relativeVersion), 'B');
+      assert.equal(await page.evaluate(() => window.buildVersion), 'B');
       assert.match((await resource(page, '/mutable.svg')).body, /<title>B<\/title>/);
       await page.goto(origin + '/removed/');
       assert.equal(await page.locator('h1').textContent(), 'Offline', 'Activated B must not resurrect removed A route');
@@ -224,7 +229,7 @@ try {
         return [url, digest];
       }))), Object.keys(digests));
       assert.deepEqual(actual, digests);
-      reports.push({ navigationStrategy, stripQuery, aRevision: a.revision, bRevision: b.revision, rejectedInstall: 'passed', activeOldClient: 'passed', independentNetworkControl: 'passed', reconnectImmutableCorpus: 'passed', naturalActivation: 'passed', removedRoute: 'passed', queryAndResourceBoundaries: 'passed', bodyDigests: Object.keys(digests).length });
+      reports.push({ navigationStrategy, stripQuery, aRevision: a.revision, bRevision: b.revision, rejectedInstall: 'passed', activeOldClient: 'passed', independentNetworkControl: 'passed', reconnectImmutableCorpus: 'passed', versionedNetworkResources: 'passed', naturalActivation: 'passed', removedRoute: 'passed', queryAndResourceBoundaries: 'passed', bodyDigests: Object.keys(digests).length });
     } finally { mixed = false; await context.close(); }
   }
   console.log(JSON.stringify({ sourceCommit: run('git', ['rev-parse', 'HEAD'], root, process.env, true).trim(), node: process.version, chromium: browser.version(), origin, packedInstalledPayloads: 'passed', historicalWorkerSha256: sha256(await readFile(path.join(historicalInstalled, 'src/worker.mjs'))), currentWorkerSha256: sha256(await readFile(path.join(installed, 'src/worker.mjs'))), stillArchiveSha256: sha256(await readFile(path.join(consumer, 'vendor', packed.filename))), offlineVersion: installedManifest.version, offlineArchiveSha256: archiveSha256, reports, networkRequests: requests.length, hostedAcceptance: 'not run', release: 'not performed' }, null, 2));
