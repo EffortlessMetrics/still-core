@@ -36,6 +36,7 @@
   "playwright.config.ts",
   "scripts/audit-boundary.mjs",
   "scripts/create-starter.mjs",
+  "scripts/minimal-consumer-contract.mjs",
   "scripts/scope-starter-license.mjs",
   "scripts/serve-thin-upgrade.mjs",
   "scripts/upgrade-fixture.mjs",
@@ -75,5 +76,6 @@
   "tests/fixtures/thin-upgrade/PROVENANCE.json",
   "tests/fixtures/thin-upgrade/starter-source.tar.gz",
   "tests/fixtures/thin-upgrade/still-0.2.0.tar.gz",
+  "tests/minimal-consumer-contract.test.mjs",
   "tests/upgrade-fixture.test.mjs"
 ]

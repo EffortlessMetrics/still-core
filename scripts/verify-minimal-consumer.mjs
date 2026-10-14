@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { chromium } from '@playwright/test';
+import { assertPropRejections } from './minimal-consumer-contract.mjs';
 import { authenticateArchive, fixture, root, stillName, sha256, json, run, snapshot } from './upgrade-fixture.mjs';
 
 // This consumer is authored independently; no starter source or adapter is copied.
@@ -82,7 +83,7 @@ async function qualify(version, archive, expectedFiles) {
   const frozen = await snapshot(consumer);
   run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
   const installed = path.join(consumer, 'node_modules', stillName);
-  assert((await realpath(installed)).startsWith(consumer + path.sep), 'No producer workspace link');
+  assert((await realpath(installed)).startsWith((await realpath(consumer)) + path.sep), 'No producer workspace link');
   const manifest = await json(path.join(installed, 'package.json'));
   assert.equal(manifest.version, version);
   assert.deepEqual(manifest.exports, exports, 'Stable public export contract');
@@ -103,8 +104,7 @@ async function qualify(version, archive, expectedFiles) {
     const result = spawnSync(command, args, { cwd: consumer, env: process.env, encoding: 'utf8' });
     const diagnostics = (result.stdout + result.stderr).replace(/\x1b\[[0-9;]*m/g, '');
     assert.equal(result.status, 1, 'Invalid props must fail type checking: ' + diagnostics);
-    for (const name of Object.keys(invalidProps)) assert.match(diagnostics, new RegExp(`src/pages/invalid/${name}\\.astro[^]*?error[^]*?ts\\((2322|2741)\\)`), 'Missing rejection for ' + name);
-    assert.match(diagnostics, /- 12 errors/, 'Each component must reject its invalid prop contract: ' + diagnostics);
+    assertPropRejections(diagnostics, Object.keys(invalidProps));
     console.log(`Rejected invalid props on all 12 installed components (${version}).`);
   } finally { await rm(negative, { recursive: true, force: true }); }
   run('npm', ['run', 'build'], consumer);
