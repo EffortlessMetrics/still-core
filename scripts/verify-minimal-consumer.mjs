@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { chromium } from '@playwright/test';
 import { assertPropRejections } from './minimal-consumer-contract.mjs';
+import { compatibleOutput } from './compatible-output.mjs';
 import { authenticateArchive, fixture, root, stillName, sha256, json, run, snapshot } from './upgrade-fixture.mjs';
 
 // This consumer is authored independently; no starter source or adapter is copied.
@@ -31,7 +32,64 @@ const source = path.join(root, 'tests/fixtures/minimal-consumer');
 const provenance = await json(path.join(fixture, 'PROVENANCE.json'));
 await authenticateArchive(path.join(fixture, provenance.historicalStill.archive), provenance.historicalStill, 'package/');
 
-async function browserContract() {
+async function dividerContract(browser, base, supportsDividers) {
+  const geometry = {};
+  for (const javaScriptEnabled of [true, false]) for (const colorScheme of ['light', 'dark']) {
+    const context = await browser.newContext({ javaScriptEnabled, colorScheme });
+    try {
+      const page = await context.newPage();
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(base + '/dividers/', { waitUntil: 'networkidle' });
+        for (const selector of ['#three', '#two-columns']) {
+          const columns = page.locator(selector + ' .package-columns');
+          const pseudo = await columns.locator('.package-column').nth(1).evaluate(element => {
+            const css = getComputedStyle(element, '::before');
+            return Object.fromEntries(['content', 'opacity', 'width', 'height', 'left', 'top', 'backgroundImage', 'backgroundSize', 'backgroundRepeat', 'maskImage', 'pointerEvents', 'filter', 'animationName'].map(name => [name, css[name]]));
+          });
+          if (supportsDividers) {
+            assert.equal(pseudo.content, '""');
+            assert.equal(pseudo.opacity, '0.1');
+            assert.match(pseudo.backgroundImage, /radial-gradient/);
+            assert.match(pseudo.maskImage, /linear-gradient.*50%.*rgba\(0, 0, 0, 0\)/);
+            assert.equal(pseudo.pointerEvents, 'none');
+            assert.equal(pseudo.filter, 'none');
+            assert.equal(pseudo.animationName, 'none');
+            if (width > 760) {
+              assert.equal(await columns.evaluate(element => getComputedStyle(element).columnGap), '72px');
+              assert.equal(pseudo.width, '2px');
+              assert.equal(pseudo.left, '-36px');
+              assert.equal(pseudo.top, '0px');
+              assert.equal(pseudo.backgroundSize, '2px 8px');
+              assert.match(pseudo.backgroundRepeat, /repeat-y|no-repeat repeat/);
+            } else {
+              assert.equal(pseudo.height, '2px');
+              assert.equal(pseudo.top, '-24px');
+              assert.equal(pseudo.left, '0px');
+              assert.equal(pseudo.backgroundSize, '8px 2px');
+              assert.match(pseudo.backgroundRepeat, /repeat-x|repeat no-repeat/);
+            }
+          } else assert.equal(pseudo.content, 'none', 'Historical control must expose the missing divider');
+          assert.equal(await columns.locator('.package-column').first().evaluate(element => getComputedStyle(element, '::before').content), 'none');
+          await columns.evaluate(element => element.classList.remove('service-dividers'));
+          assert.equal(await columns.locator('.package-column').nth(1).evaluate(element => getComputedStyle(element, '::before').content), 'none', 'Removing opt-in restores plain columns');
+          if (width > 760) assert.equal(await columns.evaluate(element => getComputedStyle(element).columnGap), '36px');
+        }
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        geometry[`${javaScriptEnabled}/${colorScheme}/${width}`] = await page.locator('#plain').evaluate(element => {
+          const fields = ['width', 'height', 'fontSize', 'lineHeight', 'padding', 'borderTopWidth', 'backgroundColor', 'columnGap'];
+          return [element.querySelector('.package-columns'), ...element.querySelectorAll('.package-column, .package-price'), document.querySelector('.cta'), document.querySelector('footer')].map(node => {
+            const css = getComputedStyle(node);
+            return Object.fromEntries(fields.map(name => [name, css[name]]));
+          });
+        });
+      }
+    } finally { await context.close(); }
+  }
+  return geometry;
+}
+
+async function browserContract(supportsDividers) {
   const dist = path.join(consumer, 'dist');
   const server = createServer(async (request, response) => {
     try {
@@ -72,14 +130,14 @@ async function browserContract() {
     assert.equal(await page.locator('.package-column > p').first().textContent(), 'Consumer description');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.deepEqual(failures, [], 'Consumer asset and runtime requests must succeed');
-    return browser.version();
+    return { browserVersion: browser.version(), defaultGeometry: await dividerContract(browser, base, supportsDividers) };
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
   }
 }
 
-async function qualify(version, archive, expectedFiles) {
+async function qualify(version, archive, expectedFiles, supportsDividers) {
   const frozen = await snapshot(consumer);
   run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
   const installed = path.join(consumer, 'node_modules', stillName);
@@ -108,9 +166,9 @@ async function qualify(version, archive, expectedFiles) {
     console.log(`Rejected invalid props on all 12 installed components (${version}).`);
   } finally { await rm(negative, { recursive: true, force: true }); }
   run('npm', ['run', 'build'], consumer);
-  const browserVersion = await browserContract();
+  const browserReport = await browserContract(supportsDividers);
   assert.deepEqual(await snapshot(consumer), frozen, 'Qualification must preserve consumer source, pins and lock');
-  return { version, archiveSha256: sha256(await readFile(archive)), output: await snapshot(path.join(consumer, 'dist')), install: 'passed', exports: 'passed', payload: 'passed', validTypes: 'passed', invalidTypes: 'passed', browserAssetsRuntime: 'passed', browserVersion };
+  return { version, archiveSha256: sha256(await readFile(archive)), output: await compatibleOutput(path.join(consumer, 'dist')), install: 'passed', exports: 'passed', payload: 'passed', validTypes: 'passed', invalidTypes: 'passed', browserAssetsRuntime: 'passed', dividers: supportsDividers ? 'passed' : 'missing control confirmed', ...browserReport };
 }
 
 try {
@@ -121,7 +179,7 @@ try {
   const manifest = { name: 'independent-still-consumer', private: true, type: 'module', license: 'UNLICENSED', scripts: { check: 'astro check', build: 'astro build' }, dependencies: { [stillName]: 'file:' + historical, astro: '7.3.5' }, devDependencies: { '@astrojs/check': '0.9.10', typescript: '6.0.3' } };
   await writeFile(path.join(consumer, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
   run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
-  const baseline = await qualify('0.2.0', path.join(consumer, historical), provenance.historicalStill.files);
+  const baseline = await qualify('0.2.0', path.join(consumer, historical), provenance.historicalStill.files, false);
   const before = await snapshot(consumer);
   const beforeLock = await json(path.join(consumer, 'package-lock.json'));
   const packed = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', path.join(consumer, 'vendor')], path.join(root, 'packages/still'), process.env, true))[0];
@@ -141,7 +199,9 @@ try {
   assert.deepEqual(Object.keys(after).filter(file => !(file in before)), [current]);
   const currentFiles = {};
   for (const file of expected) currentFiles[file] = sha256(await readFile(path.join(root, 'packages/still', file)));
-  const candidate = await qualify(packed.version, path.join(consumer, current), currentFiles);
-  assert.deepEqual(candidate.output, baseline.output, 'Dependency-only relocation preserves every emitted byte');
-  console.log(JSON.stringify({ sourceCommit: run('git', ['rev-parse', 'HEAD'], root, process.env, true).trim(), node: process.version, browser: process.env.STILL_BROWSER_EXECUTABLE || 'Playwright bundled Chromium', baseline, candidate, dependencyLockOnlyUpgrade: 'passed', emittedByteParity: 'passed' }, null, 2));
+  const candidate = await qualify(packed.version, path.join(consumer, current), currentFiles, true);
+  assert.deepEqual(candidate.output, baseline.output, 'Only bundled CSS bytes and their exact HTML URLs may change');
+  assert.deepEqual(candidate.defaultGeometry, baseline.defaultGeometry, 'Default columns, cards, footer, actions and prices remain unchanged');
+  for (const report of [baseline, candidate]) { report.defaultGeometrySha256 = sha256(Buffer.from(JSON.stringify(report.defaultGeometry))); delete report.defaultGeometry; }
+  console.log(JSON.stringify({ sourceCommit: run('git', ['rev-parse', 'HEAD'], root, process.env, true).trim(), node: process.version, browser: process.env.STILL_BROWSER_EXECUTABLE || 'Playwright bundled Chromium', baseline, candidate, dependencyLockOnlyUpgrade: 'passed', stylesheetOnlyOutputChange: 'passed', defaultCompositionParity: 'passed' }, null, 2));
 } finally { await rm(temporary, { recursive: true, force: true }); }

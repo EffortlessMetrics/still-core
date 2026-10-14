@@ -1,10 +1,10 @@
 # @effortlessmetrics/still
 
-Current producer: https://github.com/EffortlessMetrics/still-core. Version 0.2.1 is an unpublished uniquely identified relocation candidate. The branded starter is https://github.com/EffortlessMetrics/still.
+Current producer: https://github.com/EffortlessMetrics/still-core. Version 0.2.2 is an unpublished uniquely identified optional-divider candidate. The branded starter is https://github.com/EffortlessMetrics/still.
 
 # Still package API
 
-Version 0.2.1 is an unpublished relocation candidate. The package is Astro source with a peer requirement of Astro 7.3.5 within major 7. Import `@effortlessmetrics/still/styles.css` once in your site, then compose pages from these exports:
+Version 0.2.2 is an unpublished optional-divider candidate. The package is Astro source with a peer requirement of Astro 7.3.5 within major 7. Import `@effortlessmetrics/still/styles.css` once in your site, then compose pages from these exports:
 
 | Export | Purpose and inputs |
 | --- | --- |
@@ -28,3 +28,5 @@ Composition components accept an optional class. Keep the main id consistent wit
 The default body type is 22px with 1.65 line height; mobile preserves that reading size. Desktop content width and spacing keep a short home naturally compact without fixed-height clipping. Service columns share heading/description/price rows and stack below 760px. Consumers can override the documented CSS properties `--bg`, `--text`, `--accent`, `--surface`, `--muted`, `--line`, `--field-border`, `--tint` and `--band` in their own stylesheet. Fonts and icon treatments remain consumer choices.
 
 Metadata strings, canonical origin, language, favicon, navigation, copy, service descriptions and prices are consumer inputs. Contact, CAPTCHA, delivery, prefetch and offline policy are separate integrations. No site credentials, domains, prices, recipient addresses, fonts or logos are shipped in the package. Code license: MIT OR Apache-2.0, at your option.
+
+Opt in to static service separators with `<ServiceColumns class="service-dividers">`. Desktop gutters are 72px with faint 2px dotted accent separators and transparent ends; at 760px and below they become horizontal. Remove the class to restore plain columns. `ServiceOffer class="offer"` remains available for card composition. No script, animation or filter is required.

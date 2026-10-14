@@ -9,3 +9,5 @@ Fonts in the starter are optional self-hosted IBM Plex examples under their own 
 Page and ServicePage main elements use `tabindex=-1` so skip navigation transfers keyboard focus into content without adding an extra tab stop. Keyboard qualification checks focus at the destination and continues to the first content action.
 
 ServiceOffer accepts `class=offer` to reuse the home card surface, accent border and padding while ServiceColumns retains aligned price rows and mobile stacking. The starter demonstrates this composition on both service detail pages. Shared action spacing keeps a 12px label/arrow gap with the existing 14px by 22px padding.
+
+`ServiceColumns class="service-dividers"` adds optional faint, fading dotted separators with 72px desktop gutters. At 760px and below separators become horizontal. The class is opt-in; plain columns and `ServiceOffer class="offer"` composition remain unchanged. Separators are static CSS with no pointer events, filter or animation.

@@ -1,10 +1,10 @@
 # Still core
 
-Reusable public machinery for the [still starter](https://github.com/EffortlessMetrics/still). This repository owns the unchanged npm identity `@effortlessmetrics/still`. Version **0.2.1** is an unpublished relocation candidate; the existing registry release remains immutable. Install exact reviewed archives until a separately authorized release.
+Reusable public machinery for the [still starter](https://github.com/EffortlessMetrics/still). This repository owns the unchanged npm identity `@effortlessmetrics/still`. Version **0.2.2** is an unpublished optional-divider candidate; the existing registry release remains immutable. Install exact reviewed archives until a separately authorized release.
 
 The branded repository is the small editable starter. This core retains package source, public regression consumers and historical producer fixtures. Offline and static-search remain independent specialist packages. Private sites consume packages as siblings; no private site source or Git history is imported here.
 
-Use Node 24.19.x. Run `npm ci`, `npm run check`, `npm test`, `npm run build`, `npm run test:browser` and `npm run verify:packed`. Existing component exports and runtime source remain unchanged.
+Use Node 24.19.x. Run `npm ci`, `npm run check`, `npm test`, `npm run build`, `npm run test:browser` and `npm run verify:packed`. Existing component exports and component source remain unchanged; service dividers are opt-in CSS.
 
 Code is **MIT OR Apache-2.0**, at your option. Retain both license texts. Font files retain their separate SIL OFL notices and provenance; Still runtime contains no fonts.
 
@@ -22,6 +22,6 @@ Starter exporters set the generated application package to `UNLICENSED` and move
 
 For exact archive installation, compatibility checks and browser-worker rollback limits, see [upgrade an existing consumer](docs/consumer-upgrades.md).
 
-Run `npm run verify:upgrade` for the producer-owned [actual thin-starter upgrade proof](docs/thin-starter-upgrade-proof.md). It authenticates the frozen public starter, qualifies historical public Still 0.2.0 and freshly packed 0.2.1 in isolated consumers, and verifies unchanged source, runtime exports, emitted bytes, browser geometry, offline reading/reconnect and intent prefetch. CI runs this in addition to the historical exporter qualification.
+Run `npm run verify:upgrade` for the producer-owned [actual thin-starter upgrade proof](docs/thin-starter-upgrade-proof.md). It authenticates the frozen public starter, qualifies historical public Still 0.2.0, frozen relocation 0.2.1 and freshly packed 0.2.2 in isolated consumers, and verifies unchanged source, runtime exports, frozen relocation bytes, compatible default output, browser geometry, offline reading/reconnect and intent prefetch. CI runs this in addition to the historical exporter qualification.
 
-Run `npm run verify:contract` for the independently authored minimal packed consumer. It checks every public export, exact installed payload, consumer-owned assets and browser theme runtime, rejects invalid props on all twelve components, and proves a dependency/lock-only historical 0.2.0-to-current archive upgrade with unchanged source and emitted bytes. This complements the complete starter qualification; it does not establish hosted acceptance.
+Run `npm run verify:contract` for the independently authored minimal packed consumer. It checks every public export, exact installed payload, consumer-owned assets and browser theme runtime, rejects invalid props on all twelve components, and proves a dependency/lock-only historical 0.2.0-to-current archive upgrade with unchanged consumer source and default composition. The 0.2.2 proof checks static opt-in dividers across light/dark, JavaScript enabled/disabled and desktop/mobile widths; only stylesheet bytes and their exact emitted URLs may change. This complements the complete starter qualification; it does not establish hosted acceptance.

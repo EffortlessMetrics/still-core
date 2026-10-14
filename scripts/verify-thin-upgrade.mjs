@@ -4,15 +4,18 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { authenticateFixture, fixture, root, stillName, sha256, integrity, json, run, snapshot, assertUpgradeScope, verifyInstalled } from './upgrade-fixture.mjs';
+import { compatibleOutput } from './compatible-output.mjs';
 
 const provenance = await authenticateFixture();
 run(process.execPath, ['scripts/audit-boundary.mjs'], root);
 const temporary = await mkdtemp(path.join(tmpdir(), 'still-thin-upgrade-'));
 try {
   const baseline = path.join(temporary, 'baseline');
+  const relocated = path.join(temporary, 'relocated');
   const candidate = path.join(temporary, 'candidate');
   await mkdir(baseline);
   run('tar', ['-xf', path.join(fixture, provenance.starter.archive), '-C', baseline], root);
+  const archivedDelivery = await json(path.join(baseline, 'STARTER-DELIVERY.json'));
   const original = await snapshot(baseline);
   const historicalFile = 'vendor/effortlessmetrics-still-0.2.0.tgz';
   await copyFile(path.join(fixture, provenance.historicalStill.archive), path.join(baseline, historicalFile));
@@ -41,11 +44,14 @@ try {
 
   await pin(baseline, historicalFile, '0.2.0', provenance.historicalStill.commit);
   assertUpgradeScope(original, await snapshot(baseline), historicalFile);
+  await cp(baseline, relocated, { recursive: true });
+  const relocationFile = archivedDelivery.archives[stillName].file;
+  await pin(relocated, relocationFile, '0.2.1', archivedDelivery.sourceCommits['still-core']);
   await cp(baseline, candidate, { recursive: true });
   const packDirectory = path.join(temporary, 'packed');
   await mkdir(packDirectory);
   const packed = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', packDirectory], path.join(root, 'packages/still'), process.env, true))[0];
-  assert.equal(packed.version, '0.2.1');
+  assert.equal(packed.version, '0.2.2');
   const candidateFile = 'vendor/' + packed.filename;
   // The frozen starter already contains a 0.2.1 delivery. Keep those bytes intact;
   // deliver the freshly packed candidate under a distinct file identity.
@@ -74,8 +80,12 @@ try {
   assert.deepEqual(oldDelivery, newDelivery, 'Unrelated delivery entries and configuration remain unchanged');
   const candidateRecord = { sha256: sha256(await readFile(path.join(candidate, freshFile))), files: {} };
   for (const file of expectedFiles) candidateRecord.files[file] = sha256(await readFile(path.join(root, 'packages/still', file)));
+  const relocationArchive = path.join(relocated, relocationFile);
+  const relocationRecord = { sha256: sha256(await readFile(relocationArchive)), files: {} };
+  assert.equal(relocationRecord.sha256, provenance.starter.files[relocationFile], 'Retained 0.2.1 archive is authenticated by frozen starter provenance');
+  for (const file of expectedFiles) relocationRecord.files[file] = sha256(execFileSync('tar', ['-xOf', relocationArchive, 'package/' + file]));
   const reports = [];
-  for (const [name, consumer, record] of [['baseline', baseline, provenance.historicalStill], ['candidate', candidate, candidateRecord]]) {
+  for (const [name, consumer, record] of [['baseline', baseline, provenance.historicalStill], ['relocated', relocated, relocationRecord], ['candidate', candidate, candidateRecord]]) {
     const frozen = await snapshot(consumer);
     run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
     const installed = await verifyInstalled(consumer, stillName, record);
@@ -94,12 +104,22 @@ try {
   const historicalManifest = JSON.parse(execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/package.json'], { encoding: 'utf8' }));
   const currentManifest = await json(path.join(root, 'packages/still/package.json'));
   assert.deepEqual(currentManifest.exports, historicalManifest.exports, 'Public exports remain unchanged');
-  for (const file of expectedFiles.filter(file => file.startsWith('src/'))) assert.equal(candidateRecord.files[file], provenance.historicalStill.files[file], 'Runtime payload unchanged: ' + file);
+  for (const file of expectedFiles.filter(file => file.startsWith('src/'))) {
+    assert.equal(relocationRecord.files[file], provenance.historicalStill.files[file], 'Frozen relocation runtime payload unchanged: ' + file);
+    if (file !== 'src/styles.css') assert.equal(candidateRecord.files[file], provenance.historicalStill.files[file], 'Component runtime payload unchanged: ' + file);
+  }
+  const historicalCss = execFileSync('tar', ['-xOf', relocationArchive, 'package/src/styles.css']);
+  const currentCss = await readFile(path.join(root, 'packages/still/src/styles.css'));
+  assert(currentCss.subarray(0, historicalCss.length).equals(historicalCss), 'Existing CSS bytes remain unchanged; divider rules are appended');
   const geometryFile = path.join(temporary, 'candidate-geometry.json');
   assert.deepEqual(await json(geometryFile), await json(path.join(temporary, 'baseline-geometry.json')), 'Browser content/style/geometry parity');
+  assert.deepEqual(await json(path.join(temporary, 'relocated-geometry.json')), await json(path.join(temporary, 'baseline-geometry.json')), 'Frozen relocation geometry parity');
   const output = await snapshot(path.join(candidate, 'dist'));
-  assert.deepEqual(output, await snapshot(path.join(baseline, 'dist')), 'Emitted output and digest-derived worker remain byte-identical');
-  console.log(JSON.stringify({ fixtureSource: provenance.starter.commit, historicalSource: provenance.historicalStill.commit, candidateSource: newDelivery.archives[stillName].sourceCommit, historicalArchiveMatchesAcceptedBusiness: provenance.historicalStill.matchesAcceptedBusinessArchive, reports, changed: ['package.json', 'STARTER-DELIVERY.json', 'package-lock.json'], addedArchive: freshFile, runtimeAndExports: 'unchanged', runtimeFiles: expectedFiles.filter(file => file.startsWith('src/')).length, exports: Object.keys(currentManifest.exports).length, contentStyleGeometry: 'passed', geometrySha256: sha256(await readFile(geometryFile)), outputAndWorkerParity: 'passed', outputFiles: Object.keys(output).length, outputInventorySha256: sha256(Buffer.from(JSON.stringify(Object.entries(output).sort()))), workerSha256: output['reading-worker.js'], hostedAcceptance: 'not run', publication: 'not performed' }, null, 2));
+  const baselineOutput = await snapshot(path.join(baseline, 'dist'));
+  assert.deepEqual(await snapshot(path.join(relocated, 'dist')), baselineOutput, 'Frozen 0.2.0-to-0.2.1 output and digest-derived worker remain byte-identical');
+  assert.deepEqual(await compatibleOutput(path.join(candidate, 'dist'), { worker: true }), await compatibleOutput(path.join(baseline, 'dist'), { worker: true }), 'Feature output changes only stylesheet bytes/URLs and the browser-qualified digest worker');
+  assert.notEqual(output['reading-worker.js'], baselineOutput['reading-worker.js'], 'Changed CSS bytes must regenerate the output-digest worker');
+  console.log(JSON.stringify({ fixtureSource: provenance.starter.commit, historicalSource: provenance.historicalStill.commit, candidateSource: newDelivery.archives[stillName].sourceCommit, historicalArchiveMatchesAcceptedBusiness: provenance.historicalStill.matchesAcceptedBusinessArchive, reports, changed: ['package.json', 'STARTER-DELIVERY.json', 'package-lock.json'], addedArchive: freshFile, componentRuntimeAndExports: 'unchanged', existingCssPrefix: 'unchanged', runtimeFiles: expectedFiles.filter(file => file.startsWith('src/')).length, exports: Object.keys(currentManifest.exports).length, contentStyleGeometry: 'passed', geometrySha256: sha256(await readFile(geometryFile)), frozenRelocationOutputAndWorkerParity: 'passed', featureStylesheetAndDigestWorkerChange: 'passed', outputFiles: Object.keys(output).length, outputInventorySha256: sha256(Buffer.from(JSON.stringify(Object.entries(output).sort()))), workerSha256: output['reading-worker.js'], hostedAcceptance: 'not run', publication: 'not performed' }, null, 2));
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

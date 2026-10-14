@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 const manifest = JSON.parse(await readFile(new URL('../packages/still/package.json', import.meta.url), 'utf8'));
 test('candidate exports the design and composition from reviewed source', async () => {
-  assert.equal(manifest.version, '0.2.1');
+  assert.equal(manifest.version, '0.2.2');
   assert.equal(Object.keys(manifest.exports).length, 14);
   for (const path of Object.values(manifest.exports)) await readFile(new URL('../packages/still/' + path, import.meta.url));
   assert.equal(manifest.repository.url, 'git+https://github.com/EffortlessMetrics/still-core.git');

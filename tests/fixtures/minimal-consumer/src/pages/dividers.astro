@@ -1,0 +1,31 @@
+---
+import Layout from '@effortlessmetrics/still/layout';
+import Header from '@effortlessmetrics/still/header';
+import Footer from '@effortlessmetrics/still/footer';
+import ServicePage from '@effortlessmetrics/still/service-page';
+import ServiceColumns from '@effortlessmetrics/still/service-columns';
+import ServiceOffer from '@effortlessmetrics/still/service-offer';
+import Action from '@effortlessmetrics/still/action';
+import '@effortlessmetrics/still/styles.css';
+---
+<Layout title="Divider contract" description="Opt-in and default composition" origin="https://example.invalid" faviconPath="/consumer.svg" production={false}>
+  <Header slot="header" brand="Consumer" />
+  <ServicePage><h1>Divider contract</h1>
+    <div id="three"><ServiceColumns class="service-dividers">
+      <ServiceOffer headingId="one"><span slot="heading">One</span>First description.<span slot="price">First price</span></ServiceOffer>
+      <ServiceOffer headingId="two"><span slot="heading">Two</span>Second description.<span slot="price">Second price</span></ServiceOffer>
+      <ServiceOffer headingId="three-heading"><span slot="heading">Three</span>Third description.<span slot="price">Third price</span></ServiceOffer>
+    </ServiceColumns></div>
+    <div id="two-columns"><ServiceColumns columns={2} class="service-dividers">
+      <ServiceOffer headingId="pair-one"><span slot="heading">Pair one</span>First pair.<span slot="price">Pair price</span></ServiceOffer>
+      <ServiceOffer headingId="pair-two"><span slot="heading">Pair two</span>Second pair.<span slot="price">Pair price</span></ServiceOffer>
+    </ServiceColumns></div>
+    <div id="plain"><ServiceColumns>
+      <ServiceOffer class="offer" headingId="card-one"><span slot="heading">Card one</span>First card.<span slot="price">Card price</span></ServiceOffer>
+      <ServiceOffer class="offer" headingId="card-two"><span slot="heading">Card two</span>Second card.<span slot="price">Card price</span></ServiceOffer>
+      <ServiceOffer class="offer" headingId="card-three"><span slot="heading">Card three</span>Third card.<span slot="price">Card price</span></ServiceOffer>
+    </ServiceColumns></div>
+    <Action href="/">Consumer action</Action>
+  </ServicePage>
+  <Footer slot="footer" label="Contract footer">Consumer footer</Footer>
+</Layout>
