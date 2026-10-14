@@ -1,0 +1,14 @@
+---
+import Layout from '@effortlessmetrics/still/layout';
+import Header from '@effortlessmetrics/still/header';
+import ServicePage from '@effortlessmetrics/still/service-page';
+import ServiceColumns from '@effortlessmetrics/still/service-columns';
+import ServiceOffer from '@effortlessmetrics/still/service-offer';
+import '@effortlessmetrics/still/styles.css';
+---
+<Layout title="Consumer services" description="Consumer-owned service slots" origin="https://example.invalid" canonicalPath="/services/" faviconPath="/consumer.svg" production={false}>
+  <Header slot="header" brand="Consumer" />
+  <ServicePage><h1>Consumer services</h1><ServiceColumns columns={2}>
+    <ServiceOffer headingId="service"><span slot="heading">Consumer heading</span>Consumer description<span slot="price">Consumer price</span></ServiceOffer>
+  </ServiceColumns></ServicePage>
+</Layout>
