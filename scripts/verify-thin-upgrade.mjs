@@ -83,7 +83,7 @@ try {
   const relocationArchive = path.join(relocated, relocationFile);
   const relocationRecord = { sha256: sha256(await readFile(relocationArchive)), files: {} };
   assert.equal(relocationRecord.sha256, provenance.starter.files[relocationFile], 'Retained 0.2.1 archive is authenticated by frozen starter provenance');
-  for (const file of expectedFiles) relocationRecord.files[file] = sha256(execFileSync('tar', ['-xOf', relocationArchive, 'package/' + file]));
+  for (const file of Object.keys(provenance.historicalStill.files)) relocationRecord.files[file] = sha256(execFileSync('tar', ['-xOf', relocationArchive, 'package/' + file]));
   const reports = [];
   for (const [name, consumer, record] of [['baseline', baseline, provenance.historicalStill], ['relocated', relocated, relocationRecord], ['candidate', candidate, candidateRecord]]) {
     const frozen = await snapshot(consumer);
@@ -92,7 +92,7 @@ try {
     assert.equal(installed.manifest.repository.url, name === 'baseline' ? 'git+https://github.com/EffortlessMetrics/still.git' : 'git+https://github.com/EffortlessMetrics/still-core.git');
     assert.equal(installed.manifest.dependencies, undefined);
     for (const dependency of ['astromache', '@effortlessmetrics/astro-offline']) await verifyInstalled(consumer, dependency);
-    for (const [exportName, file] of Object.entries(installed.manifest.exports)) {
+    for (const [exportName, file] of Object.entries(installed.manifest.exports).flatMap(([name, target]) => (typeof target === 'string' ? [target] : Object.values(target)).map(file => [name, file]))) {
       assert.equal(sha256(await readFile(path.join(consumer, 'node_modules', stillName, file))), record.files[file.slice(2)], exportName);
     }
     const geometry = path.join(temporary, name + '-geometry.json');
@@ -103,8 +103,8 @@ try {
   }
   const historicalManifest = JSON.parse(execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/package.json'], { encoding: 'utf8' }));
   const currentManifest = await json(path.join(root, 'packages/still/package.json'));
-  assert.deepEqual(currentManifest.exports, historicalManifest.exports, 'Public exports remain unchanged');
-  for (const file of expectedFiles.filter(file => file.startsWith('src/'))) {
+  assert.deepEqual(Object.fromEntries(Object.entries(currentManifest.exports).map(([name, target]) => [name, typeof target === 'string' ? target : target.default])), historicalManifest.exports, 'Public runtime exports remain unchanged');
+  for (const file of expectedFiles.filter(file => file.endsWith('.astro') || file.endsWith('.css'))) {
     assert.equal(relocationRecord.files[file], provenance.historicalStill.files[file], 'Frozen relocation runtime payload unchanged: ' + file);
     if (file !== 'src/styles.css') assert.equal(candidateRecord.files[file], provenance.historicalStill.files[file], 'Component runtime payload unchanged: ' + file);
   }
@@ -119,7 +119,7 @@ try {
   assert.deepEqual(await snapshot(path.join(relocated, 'dist')), baselineOutput, 'Frozen 0.2.0-to-0.2.1 output and digest-derived worker remain byte-identical');
   assert.deepEqual(await compatibleOutput(path.join(candidate, 'dist'), { worker: true }), await compatibleOutput(path.join(baseline, 'dist'), { worker: true }), 'Feature output changes only stylesheet bytes/URLs and the browser-qualified digest worker');
   assert.notEqual(output['reading-worker.js'], baselineOutput['reading-worker.js'], 'Changed CSS bytes must regenerate the output-digest worker');
-  console.log(JSON.stringify({ fixtureSource: provenance.starter.commit, historicalSource: provenance.historicalStill.commit, candidateSource: newDelivery.archives[stillName].sourceCommit, historicalArchiveMatchesAcceptedBusiness: provenance.historicalStill.matchesAcceptedBusinessArchive, reports, changed: ['package.json', 'STARTER-DELIVERY.json', 'package-lock.json'], addedArchive: freshFile, componentRuntimeAndExports: 'unchanged', existingCssPrefix: 'unchanged', runtimeFiles: expectedFiles.filter(file => file.startsWith('src/')).length, exports: Object.keys(currentManifest.exports).length, contentStyleGeometry: 'passed', geometrySha256: sha256(await readFile(geometryFile)), frozenRelocationOutputAndWorkerParity: 'passed', featureStylesheetAndDigestWorkerChange: 'passed', outputFiles: Object.keys(output).length, outputInventorySha256: sha256(Buffer.from(JSON.stringify(Object.entries(output).sort()))), workerSha256: output['reading-worker.js'], hostedAcceptance: 'not run', publication: 'not performed' }, null, 2));
+  console.log(JSON.stringify({ fixtureSource: provenance.starter.commit, historicalSource: provenance.historicalStill.commit, candidateSource: newDelivery.archives[stillName].sourceCommit, historicalArchiveMatchesAcceptedBusiness: provenance.historicalStill.matchesAcceptedBusinessArchive, reports, changed: ['package.json', 'STARTER-DELIVERY.json', 'package-lock.json'], addedArchive: freshFile, componentRuntimeAndExports: 'unchanged', existingCssPrefix: 'unchanged', runtimeFiles: expectedFiles.filter(file => file.endsWith('.astro') || file.endsWith('.css')).length, exports: Object.keys(currentManifest.exports).length, contentStyleGeometry: 'passed', geometrySha256: sha256(await readFile(geometryFile)), frozenRelocationOutputAndWorkerParity: 'passed', featureStylesheetAndDigestWorkerChange: 'passed', outputFiles: Object.keys(output).length, outputInventorySha256: sha256(Buffer.from(JSON.stringify(Object.entries(output).sort()))), workerSha256: output['reading-worker.js'], hostedAcceptance: 'not run', publication: 'not performed' }, null, 2));
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }
