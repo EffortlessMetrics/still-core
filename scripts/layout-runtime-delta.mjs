@@ -27,16 +27,24 @@ export async function layoutReferenceOutput(consumer, historical, options = {}) 
   const output = await snapshot(path.join(consumer, 'dist'));
   const consumerSource = await snapshot(consumer);
   let reference;
+  const failures = [];
   try {
     await writeFile(layout, historical);
     run('npm', ['run', 'build'], consumer);
     reference = await compatibleOutput(path.join(consumer, 'dist'), options);
-  } finally {
+  } catch (error) {
+    failures.push(error);
+  }
+  try {
     await writeFile(layout, candidate);
     run('npm', ['run', 'build'], consumer);
     assert.deepEqual(await readFile(layout), candidate, 'Installed production Layout restored');
     assert.deepEqual(await snapshot(path.join(consumer, 'dist')), output, 'Production output restored byte-for-byte');
     assert.deepEqual(await snapshot(consumer), consumerSource, 'Reference builds preserve consumer source, pins and lock');
+  } catch (error) {
+    failures.push(error);
   }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, 'Reference qualification and production restoration both failed');
   return { output: reference, source };
 }
