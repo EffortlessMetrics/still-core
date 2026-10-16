@@ -27,6 +27,7 @@ export function createThinUpgradeServer(directory) {
       if (canonical !== url.pathname) {
         const location = new URL(url);
         location.pathname = canonical;
+        assert(!location.pathname.startsWith('//'));
         response.writeHead(301, { Location: location.href.slice(location.origin.length), 'Cache-Control': 'no-store, no-transform' });
         response.end();
         return;

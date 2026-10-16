@@ -73,7 +73,9 @@ test('thin-upgrade server preserves directory URL semantics and emitted bytes', 
     await writeFile(path.join(dist, 'literal%2Fname/index.html'), 'literal');
     const literal = await fetch(base + '/literal%252Fname', { redirect: 'manual' });
     assert.equal(literal.headers.get('location'), '/literal%252Fname/');
-    for (const route of ['/bad%escape', '/nested%2Fmissing', '/nested%2Fmissing.svg', '/%2Fexample.test', '/nested%5Creading%20%23100%25']) {
+    await mkdir(path.join(dist, 'redirect.test'));
+    await writeFile(path.join(dist, 'redirect.test/index.html'), 'local directory');
+    for (const route of ['/nested%2F..%2F%2Fredirect.test', '/bad%escape', '/nested%2Fmissing', '/nested%2Fmissing.svg', '/%2Fexample.test', '/nested%5Creading%20%23100%25']) {
       const missing = await fetch(base + route, { redirect: 'manual' });
       assert.equal(missing.status, 404);
       assert.equal(missing.headers.get('location'), null);
