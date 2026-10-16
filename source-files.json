@@ -84,6 +84,7 @@
   "starter/src/styles/starter.css",
   "starter/tsconfig.json",
   "tests/browser/design.spec.ts",
+  "tests/browser/encoded-routes.spec.ts",
   "tests/compatible-output.test.mjs",
   "tests/contracts.test.mjs",
   "tests/fixtures/minimal-consumer/public/consumer.svg",
