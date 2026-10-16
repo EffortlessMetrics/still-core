@@ -6,7 +6,8 @@ import path from 'node:path';
 import { once } from 'node:events';
 import { createThinUpgradeServer } from '../scripts/serve-thin-upgrade.mjs';
 
-test('thin-upgrade server preserves directory URL semantics and emitted bytes', async t => {
+test('thin-upgrade server preserves directory URL semantics and emitted bytes', { timeout: 10_000 }, async t => {
+  const fetch = (url, options = {}) => globalThis.fetch(url, { signal: AbortSignal.timeout(3_000), ...options });
   const dist = await mkdtemp(path.join(tmpdir(), 'still-route-server-'));
   // Retain this small fixture for inspection; no shared consumer is used.
   await mkdir(path.join(dist, 'workshops'));
@@ -17,7 +18,10 @@ test('thin-upgrade server preserves directory URL semantics and emitted bytes', 
   await writeFile(path.join(dist, 'workshops/diagram.svg'), '<svg/>');
   await writeFile(path.join(dist, 'reading room/index.html'), '<h1>Reading</h1>');
   const server = createThinUpgradeServer(dist);
-  t.after(() => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
+  t.after(() => {
+    server.closeAllConnections();
+    return new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -43,6 +47,37 @@ test('thin-upgrade server preserves directory URL semantics and emitted bytes', 
     assert.equal(response.status, 301);
     assert.equal(response.headers.get('location'), '/reading%20room/?next=%23main');
     assert.equal(await (await fetch(base + '/reading%20room?next=%23main')).text(), '<h1>Reading</h1>');
+  });
+
+  await t.test('encoded separators canonicalize before nested resources resolve', async () => {
+    await mkdir(path.join(dist, 'nested/reading #100%'), { recursive: true });
+    await writeFile(path.join(dist, 'nested/reading #100%/index.html'), '<img src="../shared.svg">');
+    await writeFile(path.join(dist, 'nested/shared.svg'), '<svg>nested</svg>');
+    const canonical = '/nested/reading%20%23100%25/';
+    const query = '?next=a%2Fb&tag=one+two&tag=three&empty=';
+    for (const route of ['/nested%2Freading%20%23100%25', '/nested%2freading%20%23100%25/', '/nested%2Freading%20%23100%25%2Findex.html']) {
+      const expected = canonical + (route.endsWith('index.html') ? 'index.html' : '');
+      const redirect = await fetch(base + route + query, { redirect: 'manual' });
+      assert.equal(redirect.status, 301);
+      const page = await fetch(base + route + query);
+      const asset = await fetch(new URL('../shared.svg', page.url));
+      assert.equal(asset.status, 200);
+      assert.equal(await asset.text(), '<svg>nested</svg>');
+      assert.equal(redirect.headers.get('location'), expected + query);
+      assert.equal(page.url, base + expected + query);
+    }
+    const emptyQuery = await fetch(base + '/nested%2Freading%20%23100%25?', { redirect: 'manual' });
+    assert.equal(emptyQuery.headers.get('location'), canonical + '?');
+    // Decode once: a literal percent-encoded-looking name is not a separator.
+    await mkdir(path.join(dist, 'literal%2Fname'));
+    await writeFile(path.join(dist, 'literal%2Fname/index.html'), 'literal');
+    const literal = await fetch(base + '/literal%252Fname', { redirect: 'manual' });
+    assert.equal(literal.headers.get('location'), '/literal%252Fname/');
+    for (const route of ['/bad%escape', '/nested%2Fmissing', '/nested%2Fmissing.svg', '/%2Fexample.test', '/nested%5Creading%20%23100%25']) {
+      const missing = await fetch(base + route, { redirect: 'manual' });
+      assert.equal(missing.status, 404);
+      assert.equal(missing.headers.get('location'), null);
+    }
   });
 
   await t.test('root, directory and explicit index requests remain byte-exact and fresh', async () => {

@@ -13,19 +13,23 @@ export function createThinUpgradeServer(directory) {
     try {
       const url = new URL(request.url, 'http://127.0.0.1:4390');
       const pathname = decodeURIComponent(url.pathname);
+      // A decoded separator must also be visible to browser URL resolution.
+      // Preserve all other escapes and never turn a redirect into a host URL.
+      assert(!pathname.includes('\\'));
+      let canonical = url.pathname.replace(/%2f/gi, '/');
+      assert(!canonical.startsWith('//'));
       let file = path.resolve(dist, '.' + pathname);
       assert(file.startsWith(dist + path.sep) || file === dist);
       if ((await stat(file)).isDirectory()) {
-        // Match directory hosting before resolving relative document assets.
-        // Keep the serialized path/query; decoded filesystem names are not URLs.
-        if (!url.pathname.endsWith('/')) {
-          const location = new URL(url);
-          location.pathname += '/';
-          response.writeHead(301, { Location: location.href.slice(location.origin.length), 'Cache-Control': 'no-store, no-transform' });
-          response.end();
-          return;
-        }
+        if (!canonical.endsWith('/')) canonical += '/';
         file = path.join(file, 'index.html');
+      }
+      if (canonical !== url.pathname) {
+        const location = new URL(url);
+        location.pathname = canonical;
+        response.writeHead(301, { Location: location.href.slice(location.origin.length), 'Cache-Control': 'no-store, no-transform' });
+        response.end();
+        return;
       }
       const body = await readFile(file);
       response.writeHead(200, { 'Content-Type': mime[path.extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-store, no-transform', 'X-Still-Network-Request': String(++requests) });
