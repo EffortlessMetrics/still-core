@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertLayoutRuntimeDelta } from '../scripts/layout-runtime-delta.mjs';
+import { assertLayoutRuntimeDelta, layoutReferenceOutput } from '../scripts/layout-runtime-delta.mjs';
+import { run, snapshot } from '../scripts/upgrade-fixture.mjs';
 
 const historical = execFileSync('tar', ['-xOf', fileURLToPath(new URL('./fixtures/thin-upgrade/still-0.2.0.tar.gz', import.meta.url)), 'package/src/Layout.astro']);
 const candidate = await readFile(new URL('../packages/still/src/Layout.astro', import.meta.url));
@@ -85,4 +88,45 @@ test('reference qualification preserves failures and restores production', async
       syncBuiltinESMExports();
     }
   });
+});
+
+test('successful consumer build with invalid reference output preserves diagnostics and restores production', async t => {
+  const consumer = await mkdtemp(path.join(tmpdir(), 'still-layout-validation-'));
+  t.after(() => rm(consumer, { recursive: true, force: true }));
+  const layout = path.join(consumer, 'node_modules/@effortlessmetrics/still/src/Layout.astro');
+  await mkdir(path.dirname(layout), { recursive: true });
+  await writeFile(layout, candidate);
+  await writeFile(path.join(consumer, 'package.json'), JSON.stringify({
+    private: true, type: 'module', scripts: { build: 'node build.mjs' },
+  }));
+  // Real npm subprocesses exercise a successful build followed by a validation
+  // error, rather than another build-command exception. No install is needed.
+  await writeFile(path.join(consumer, 'build.mjs'), `
+import { readFile, writeFile, mkdir, rm, appendFile } from 'node:fs/promises';
+const layout = await readFile('node_modules/@effortlessmetrics/still/src/Layout.astro');
+const reference = layout.includes(Buffer.from(${JSON.stringify("dataset.themeKey || 'site-theme'")}));
+await rm('dist', { recursive: true, force: true });
+await mkdir('dist');
+await writeFile('dist/site.css', 'body{}');
+await writeFile('dist/index.html', layout);
+if (reference) await writeFile('dist/split.css', 'aside{}');
+await appendFile('node_modules/build-phases.txt', reference ? 'reference\\n' : 'production\\n');
+`);
+  run('npm', ['run', 'build'], consumer);
+  const production = await snapshot(path.join(consumer, 'dist'));
+  const source = await snapshot(consumer);
+
+  await assert.rejects(layoutReferenceOutput(consumer, historical), error => {
+    assert(error instanceof assert.AssertionError);
+    assert.equal(error.code, 'ERR_ASSERTION');
+    assert.match(error.message, /^Expected the single bundled Still\/consumer stylesheet/);
+    assert.equal(error.actual, 2);
+    assert.equal(error.expected, 1);
+    assert.equal(error.operator, 'strictEqual');
+    return true;
+  });
+  assert.equal(await readFile(path.join(consumer, 'node_modules/build-phases.txt'), 'utf8'), 'production\nreference\nproduction\n');
+  assert.deepEqual(await readFile(layout), candidate);
+  assert.deepEqual(await snapshot(path.join(consumer, 'dist')), production);
+  assert.deepEqual(await snapshot(consumer), source);
 });
