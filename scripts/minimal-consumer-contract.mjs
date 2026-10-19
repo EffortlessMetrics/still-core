@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 
+export function assertConsumerUpgradeScope(before, after, addedArchive) {
+  assert.deepEqual(Object.keys(before).filter(file => before[file] !== after[file]).sort(), ['package-lock.json', 'package.json']);
+  assert.deepEqual(Object.keys(after).filter(file => !Object.hasOwn(before, file)), [addedArchive]);
+}
+
 export function assertPropRejections(diagnostics, names) {
   for (const name of names) {
     // Bind the error to this file's diagnostic header, never a later file/block.

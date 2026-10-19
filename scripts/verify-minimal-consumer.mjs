@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { chromium } from '@playwright/test';
-import { assertPropRejections } from './minimal-consumer-contract.mjs';
+import { assertConsumerUpgradeScope, assertPropRejections } from './minimal-consumer-contract.mjs';
 import { compatibleOutput } from './compatible-output.mjs';
 import { layoutReferenceOutput } from './layout-runtime-delta.mjs';
 import { themeConfiguration } from './layout-theme-browser.mjs';
@@ -198,8 +198,7 @@ try {
   beforeLock.packages['node_modules/' + stillName] = newLock.packages['node_modules/' + stillName];
   assert.deepEqual(newLock, beforeLock, 'Only Still lock entries change');
   const after = await snapshot(consumer, { ignoreGenerated: true });
-  assert.deepEqual(Object.keys(before).filter(file => before[file] !== after[file]).sort(), ['package-lock.json', 'package.json']);
-  assert.deepEqual(Object.keys(after).filter(file => !(file in before)), [current]);
+  assertConsumerUpgradeScope(before, after, current);
   const currentFiles = {};
   for (const file of expected) currentFiles[file] = sha256(await readFile(path.join(root, 'packages/still', file)));
   const candidate = await qualify(packed.version, path.join(consumer, current), currentFiles, true, true);
