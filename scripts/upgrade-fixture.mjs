@@ -48,7 +48,8 @@ export async function authenticateFixture() {
 }
 
 export async function snapshot(directory, prefix = '') {
-  const files = {};
+  // Filenames such as __proto__ must be ordinary data during accumulation.
+  const files = Object.create(null);
   for (const entry of await readdir(path.join(directory, prefix), { withFileTypes: true })) {
     if (['node_modules', 'dist', '.astro'].includes(entry.name)) continue;
     const file = prefix + entry.name;
@@ -56,13 +57,13 @@ export async function snapshot(directory, prefix = '') {
     if (entry.isDirectory()) Object.assign(files, await snapshot(directory, file + '/'));
     else files[file] = sha256(await readFile(path.join(directory, file)));
   }
-  return files;
+  return { ...files };
 }
 
 export function assertUpgradeScope(before, after, addedArchive) {
   const changed = Object.keys(before).filter(file => before[file] !== after[file]).sort();
   assert.deepEqual(changed, ['STARTER-DELIVERY.json', 'package-lock.json', 'package.json'], 'Only Still pin, delivery and lock may change');
-  assert.deepEqual(Object.keys(after).filter(file => !(file in before)), [addedArchive], 'Only the new Still archive may be added');
+  assert.deepEqual(Object.keys(after).filter(file => !Object.hasOwn(before, file)), [addedArchive], 'Only the new Still archive may be added');
 }
 
 export async function verifyInstalled(consumer, name, expectedRecord) {

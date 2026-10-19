@@ -4,7 +4,7 @@ import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promi
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { authenticateFixture, authenticateArchive, assertUpgradeScope, fixture, sha256, frozenRelocationFiles } from '../scripts/upgrade-fixture.mjs';
+import { authenticateFixture, authenticateArchive, assertUpgradeScope, fixture, sha256, frozenRelocationFiles, snapshot } from '../scripts/upgrade-fixture.mjs';
 
 test('source boundary rejects an allowlisted fixture archive without provenance', async () => {
   const root = path.resolve(fixture, '../../..');
@@ -69,6 +69,37 @@ test('upgrade rejects consumer content, configuration, notice changes and stray 
     assert.throws(() => assertUpgradeScope(before, missing, 'vendor/new.tgz'), /Only Still pin/);
   }
   assert.throws(() => assertUpgradeScope(before, { ...after, 'stray.txt': 'k' }, 'vendor/new.tgz'), /Only the new Still archive/);
+});
+
+test('upgrade snapshots retain prototype-named files and reject changed, removed and added bytes', async () => {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'still-prototype-source-'));
+  try {
+    const names = ['__proto__', 'constructor', 'toString', 'assets/__proto__'];
+    await mkdir(path.join(temporary, 'assets'));
+    for (const file of ['package.json', 'package-lock.json', 'STARTER-DELIVERY.json', ...names]) {
+      await writeFile(path.join(temporary, file), 'original ' + file);
+    }
+    const before = await snapshot(temporary);
+    assert.equal(Object.getPrototypeOf(before), Object.prototype, 'Preserve the ordinary record contract');
+    const upgraded = files => ({ ...files, 'package.json': 'new pin', 'package-lock.json': 'new lock', 'STARTER-DELIVERY.json': 'new receipt', 'vendor/new.tgz': 'new archive' });
+    assertUpgradeScope(before, upgraded(before), 'vendor/new.tgz');
+    for (const file of names) {
+      assert(Object.hasOwn(before, file), 'Snapshot must own ' + file);
+      assert.equal(before[file], sha256('original ' + file));
+      await writeFile(path.join(temporary, file), 'changed');
+      const changed = await snapshot(temporary);
+      assert.equal(changed[file], sha256('changed'));
+      assert.throws(() => assertUpgradeScope(before, upgraded(changed), 'vendor/new.tgz'), /Only Still pin/);
+      await rm(path.join(temporary, file));
+      const removed = await snapshot(temporary);
+      assert.equal(Object.hasOwn(removed, file), false);
+      assert.throws(() => assertUpgradeScope(before, upgraded(removed), 'vendor/new.tgz'), /Only Still pin/);
+      await writeFile(path.join(temporary, file), 'original ' + file);
+      const restored = await snapshot(temporary);
+      assert.deepEqual(restored, before);
+      assert.throws(() => assertUpgradeScope(removed, upgraded(restored), 'vendor/new.tgz'), /Only the new Still archive/);
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 
 test('frozen relocation authenticates its added changelog without current declarations', async () => {
