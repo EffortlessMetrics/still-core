@@ -25,7 +25,7 @@ export async function layoutReferenceOutput(consumer, historical, options = {}) 
   const candidate = await readFile(layout);
   const source = assertLayoutRuntimeDelta(candidate, historical);
   const output = await snapshot(path.join(consumer, 'dist'));
-  const consumerSource = await snapshot(consumer);
+  const consumerSource = await snapshot(consumer, { ignoreGenerated: true });
   let reference;
   const failures = [];
   try {
@@ -40,7 +40,7 @@ export async function layoutReferenceOutput(consumer, historical, options = {}) 
     run('npm', ['run', 'build'], consumer);
     assert.deepEqual(await readFile(layout), candidate, 'Installed production Layout restored');
     assert.deepEqual(await snapshot(path.join(consumer, 'dist')), output, 'Production output restored byte-for-byte');
-    assert.deepEqual(await snapshot(consumer), consumerSource, 'Reference builds preserve consumer source, pins and lock');
+    assert.deepEqual(await snapshot(consumer, { ignoreGenerated: true }), consumerSource, 'Reference builds preserve consumer source, pins and lock');
   } catch (error) {
     failures.push(error);
   }

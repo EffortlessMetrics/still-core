@@ -5,6 +5,31 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { compatibleOutput } from '../scripts/compatible-output.mjs';
 
+test('output qualification detects changes under generated-looking route and asset names', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'still-complete-output-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(path.join(directory, 'site.css'), 'body{}');
+  await writeFile(path.join(directory, 'index.html'), '<h1>Home</h1>');
+  for (const name of ['dist', 'node_modules', '.astro']) {
+    for (const prefix of ['', 'assets/']) {
+      const relative = prefix + name + '/index.html';
+      const file = path.join(directory, relative);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, '<h1>Original</h1>');
+      const baseline = await compatibleOutput(directory);
+      assert(relative in baseline, 'Complete output includes ' + relative);
+      await writeFile(file, '<h1>Changed</h1>');
+      assert.notDeepEqual(await compatibleOutput(directory), baseline, 'Changed output: ' + relative);
+      await rm(file);
+      assert.notDeepEqual(await compatibleOutput(directory), baseline, 'Removed output: ' + relative);
+      await writeFile(file, '<h1>Original</h1>');
+      assert.deepEqual(await compatibleOutput(directory), baseline, 'Restored output: ' + relative);
+      await writeFile(path.join(path.dirname(file), 'extra.svg'), '<svg/>');
+      assert.notDeepEqual(await compatibleOutput(directory), baseline, 'Added asset beside ' + relative);
+    }
+  }
+});
+
 test('stylesheet URL normalization preserves unrelated HTML and asset evidence', async () => {
   const temporary = await mkdtemp(path.join(tmpdir(), 'still-output-contract-'));
   try {

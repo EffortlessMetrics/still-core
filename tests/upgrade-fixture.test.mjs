@@ -1,10 +1,63 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm, symlink } from 'node:fs/promises';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { authenticateFixture, authenticateArchive, assertUpgradeScope, fixture, sha256, frozenRelocationFiles } from '../scripts/upgrade-fixture.mjs';
+import { authenticateFixture, authenticateArchive, assertUpgradeScope, fixture, sha256, frozenRelocationFiles, snapshot } from '../scripts/upgrade-fixture.mjs';
+
+test('snapshots include complete trees and exclude only opted-in consumer-root generated paths', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'still-snapshot-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const expected = { 'package.json': sha256('manifest') };
+  const source = { ...expected };
+  await writeFile(path.join(directory, 'package.json'), 'manifest');
+  for (const name of ['dist', 'node_modules', '.astro']) {
+    for (const prefix of ['', 'src/pages/', 'public/assets/']) {
+      const file = prefix + name + '/index.html';
+      await mkdir(path.dirname(path.join(directory, file)), { recursive: true });
+      await writeFile(path.join(directory, file), file);
+      expected[file] = sha256(file);
+      if (prefix) source[file] = expected[file];
+    }
+  }
+  assert.deepEqual(await snapshot(directory), expected, 'Output/package snapshots must include all names');
+  assert.deepEqual(await snapshot(directory, { ignoreGenerated: true }), source, 'Source snapshots exclude only generated root paths');
+  await symlink(directory, path.join(directory, 'src/pages/nested-link'), 'junction');
+  await assert.rejects(snapshot(directory, { ignoreGenerated: true }), /must not contain symlinks/);
+});
+
+test('upgrade scope rejects changes beneath nested generated-looking source paths', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'still-source-scope-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const metadata = ['package.json', 'package-lock.json', 'STARTER-DELIVERY.json'];
+  for (const file of metadata) await writeFile(path.join(directory, file), 'original');
+  for (const name of ['dist', 'node_modules', '.astro']) {
+    const file = path.join(directory, 'src/pages', name, 'index.astro');
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, 'original');
+  }
+  const before = await snapshot(directory, { ignoreGenerated: true });
+  for (const file of metadata) await writeFile(path.join(directory, file), 'upgraded');
+  await mkdir(path.join(directory, 'vendor'));
+  await writeFile(path.join(directory, 'vendor/new.tgz'), 'new archive');
+  assertUpgradeScope(before, await snapshot(directory, { ignoreGenerated: true }), 'vendor/new.tgz');
+  for (const name of ['dist', 'node_modules', '.astro']) {
+    const file = path.join(directory, 'src/pages', name, 'index.astro');
+    await writeFile(file, 'changed consumer content');
+    const changed = await snapshot(directory, { ignoreGenerated: true });
+    assert.throws(() => assertUpgradeScope(before, changed, 'vendor/new.tgz'), /Only Still pin/);
+    await rm(file);
+    const removed = await snapshot(directory, { ignoreGenerated: true });
+    assert.throws(() => assertUpgradeScope(before, removed, 'vendor/new.tgz'), /Only Still pin/);
+    await writeFile(file, 'original');
+    const addition = path.join(path.dirname(file), 'added.astro');
+    await writeFile(addition, 'added consumer content');
+    const added = await snapshot(directory, { ignoreGenerated: true });
+    assert.throws(() => assertUpgradeScope(before, added, 'vendor/new.tgz'), /Only the new Still archive/);
+    await rm(addition);
+  }
+});
 
 test('source boundary rejects an allowlisted fixture archive without provenance', async () => {
   const root = path.resolve(fixture, '../../..');
