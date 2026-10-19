@@ -4,6 +4,38 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { compatibleOutput } from '../scripts/compatible-output.mjs';
+import { sha256 } from '../scripts/upgrade-fixture.mjs';
+
+test('compatible output retains prototype-named files and detects changed, removed and added bytes', async () => {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'still-prototype-output-'));
+  try {
+    const names = ['__proto__', 'constructor', 'toString', 'assets/__proto__'];
+    await mkdir(path.join(temporary, 'assets'));
+    await writeFile(path.join(temporary, 'site.css'), 'body{}');
+    await writeFile(path.join(temporary, 'index.html'), '<link rel="stylesheet" href="/site.css"><h1>Consumer</h1>');
+    const empty = await compatibleOutput(temporary);
+    for (const file of names) await writeFile(path.join(temporary, file), 'original ' + file);
+    const before = await compatibleOutput(temporary);
+    assert.equal(Object.getPrototypeOf(before), Object.prototype, 'Preserve the ordinary record contract');
+    assert.notDeepEqual(before, empty);
+    for (const file of names) {
+      assert(Object.hasOwn(before, file), 'Compatible output must own ' + file);
+      assert.equal(before[file], sha256('original ' + file));
+      await writeFile(path.join(temporary, file), 'changed');
+      const changed = await compatibleOutput(temporary);
+      assert.equal(changed[file], sha256('changed'));
+      assert.notDeepEqual(changed, before, 'Changed file: ' + file);
+      await rm(path.join(temporary, file));
+      const removed = await compatibleOutput(temporary);
+      assert.equal(Object.hasOwn(removed, file), false);
+      assert.notDeepEqual(removed, before, 'Removed file: ' + file);
+      await writeFile(path.join(temporary, file), 'original ' + file);
+      const restored = await compatibleOutput(temporary);
+      assert.deepEqual(restored, before);
+      assert.notDeepEqual(restored, removed, 'Added file: ' + file);
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }); }
+});
 
 test('output qualification detects changes under generated-looking route and asset names', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'still-complete-output-'));
