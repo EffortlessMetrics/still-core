@@ -82,6 +82,39 @@ test('thin-upgrade server preserves directory URL semantics and emitted bytes', 
     }
   });
 
+  await t.test('repeated separators canonicalize to the filesystem resource base', async () => {
+    await mkdir(path.join(dist, 'nested/page'), { recursive: true });
+    const nested = '<img src="../../root.svg">';
+    await writeFile(path.join(dist, 'nested/page/index.html'), nested);
+    await writeFile(path.join(dist, 'nested/page/entry.js'), 'loaded();');
+    await writeFile(path.join(dist, 'root.svg'), '<svg>root</svg>');
+    const query = '?next=a%2fb&tag=one+two&tag=three&empty=';
+    for (const route of ['/nested//page', '/nested///page/', '/nested//page//', '/nested//page//index.html', '/nested%2F%2Fpage/', '/nested/%2f/page%2F%2Findex.html']) {
+      const expected = '/nested/page/' + (route.endsWith('index.html') ? 'index.html' : '');
+      for (const suffix of [query, '?']) {
+        const redirect = await fetch(base + route + suffix, { redirect: 'manual' });
+        assert.equal(redirect.status, 301, route);
+        assert.equal(redirect.headers.get('location'), expected + suffix);
+        const page = await fetch(base + route + suffix);
+        assert.equal(page.status, 200);
+        assert.equal(page.url, base + expected + suffix);
+        assert.equal(await page.text(), nested);
+        const asset = await fetch(new URL('../../root.svg', page.url));
+        assert.equal(asset.status, 200);
+        assert.equal(await asset.text(), '<svg>root</svg>');
+      }
+    }
+    const asset = await fetch(base + '/nested//page//entry.js' + query, { redirect: 'manual' });
+    assert.equal(asset.status, 301);
+    assert.equal(asset.headers.get('location'), '/nested/page/entry.js' + query);
+    assert.equal(await (await fetch(base + '/nested//page//entry.js' + query)).text(), 'loaded();');
+    for (const route of ['/nested//missing/', '/nested/%2fmissing.svg', '/%2F%2Fredirect.test', '/nested%2F..%2F%2Fredirect.test']) {
+      const response = await fetch(base + route, { redirect: 'manual' });
+      assert.equal(response.status, 404);
+      assert.equal(response.headers.get('location'), null);
+    }
+  });
+
   await t.test('root, directory and explicit index requests remain byte-exact and fresh', async () => {
     const home = await fetch(base + '/?ref=home', { redirect: 'manual' });
     assert.equal(home.status, 200);
