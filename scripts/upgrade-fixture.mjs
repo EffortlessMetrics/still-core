@@ -47,16 +47,21 @@ export async function authenticateFixture() {
   return provenance;
 }
 
-export async function snapshot(directory, prefix = '') {
-  const files = {};
-  for (const entry of await readdir(path.join(directory, prefix), { withFileTypes: true })) {
-    if (['node_modules', 'dist', '.astro'].includes(entry.name)) continue;
-    const file = prefix + entry.name;
-    assert(!entry.isSymbolicLink(), 'Consumer source must not contain symlinks: ' + file);
-    if (entry.isDirectory()) Object.assign(files, await snapshot(directory, file + '/'));
-    else files[file] = sha256(await readFile(path.join(directory, file)));
+// Output and installed-package trees are complete. Consumer-source callers may
+// omit generated root paths; identically named nested content remains evidence.
+export async function snapshot(directory, { ignoreGenerated = false } = {}) {
+  async function collect(prefix = '') {
+    const files = {};
+    for (const entry of await readdir(path.join(directory, prefix), { withFileTypes: true })) {
+      if (ignoreGenerated && !prefix && ['node_modules', 'dist', '.astro'].includes(entry.name)) continue;
+      const file = prefix + entry.name;
+      assert(!entry.isSymbolicLink(), 'Consumer source must not contain symlinks: ' + file);
+      if (entry.isDirectory()) Object.assign(files, await collect(file + '/'));
+      else files[file] = sha256(await readFile(path.join(directory, file)));
+    }
+    return files;
   }
-  return files;
+  return collect();
 }
 
 export function assertUpgradeScope(before, after, addedArchive) {

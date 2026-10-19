@@ -141,7 +141,7 @@ async function browserContract(supportsDividers, themeStorageFixed) {
 }
 
 async function qualify(version, archive, expectedFiles, supportsDividers, themeStorageFixed = false) {
-  const frozen = await snapshot(consumer);
+  const frozen = await snapshot(consumer, { ignoreGenerated: true });
   run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
   const installed = path.join(consumer, 'node_modules', stillName);
   assert((await realpath(installed)).startsWith((await realpath(consumer)) + path.sep), 'No producer workspace link');
@@ -170,7 +170,7 @@ async function qualify(version, archive, expectedFiles, supportsDividers, themeS
   } finally { await rm(negative, { recursive: true, force: true }); }
   run('npm', ['run', 'build'], consumer);
   const browserReport = await browserContract(supportsDividers, themeStorageFixed);
-  assert.deepEqual(await snapshot(consumer), frozen, 'Qualification must preserve consumer source, pins and lock');
+  assert.deepEqual(await snapshot(consumer, { ignoreGenerated: true }), frozen, 'Qualification must preserve consumer source, pins and lock');
   return { version, archiveSha256: sha256(await readFile(archive)), output: await compatibleOutput(path.join(consumer, 'dist')), install: 'passed', exports: 'passed', payload: 'passed', validTypes: 'passed', invalidTypes: 'passed', browserAssetsRuntime: 'passed', dividers: supportsDividers ? 'passed' : 'missing control confirmed', ...browserReport };
 }
 
@@ -183,7 +183,7 @@ try {
   await writeFile(path.join(consumer, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
   run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
   const baseline = await qualify('0.2.0', path.join(consumer, historical), provenance.historicalStill.files, false);
-  const before = await snapshot(consumer);
+  const before = await snapshot(consumer, { ignoreGenerated: true });
   const beforeLock = await json(path.join(consumer, 'package-lock.json'));
   const packed = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', path.join(consumer, 'vendor')], path.join(root, 'packages/still'), process.env, true))[0];
   const expected = (await json(path.join(root, 'source-files.json'))).filter(file => file.startsWith('packages/still/')).map(file => file.slice(15)).sort();
@@ -197,7 +197,7 @@ try {
   beforeLock.packages[''].dependencies[stillName] = newLock.packages[''].dependencies[stillName];
   beforeLock.packages['node_modules/' + stillName] = newLock.packages['node_modules/' + stillName];
   assert.deepEqual(newLock, beforeLock, 'Only Still lock entries change');
-  const after = await snapshot(consumer);
+  const after = await snapshot(consumer, { ignoreGenerated: true });
   assert.deepEqual(Object.keys(before).filter(file => before[file] !== after[file]).sort(), ['package-lock.json', 'package.json']);
   assert.deepEqual(Object.keys(after).filter(file => !(file in before)), [current]);
   const currentFiles = {};
