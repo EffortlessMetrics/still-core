@@ -21,7 +21,9 @@ export function createThinUpgradeServer(directory) {
       const location = new URL(url);
       location.pathname = canonical;
       assert(!location.pathname.startsWith('//'));
-      location.pathname = location.pathname.replace(/\/{2,}/g, '/');
+      // Collapse before final dot-segment normalization, as path.resolve does.
+      location.pathname = canonical.replace(/\/{2,}/g, '/');
+      assert(!location.pathname.startsWith('//'));
       let file = path.resolve(dist, '.' + pathname);
       assert(file.startsWith(dist + path.sep) || file === dist);
       if ((await stat(file)).isDirectory()) {

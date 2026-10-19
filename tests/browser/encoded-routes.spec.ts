@@ -53,7 +53,7 @@ test('repeated slash routes load relative resources from the canonical document 
     await once(server, 'listening');
     const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
     const query = '?next=a%2fb&tag=one+two&tag=three&empty=';
-    for (const route of ['/nested//page', '/nested///page/', '/nested//page//', '/nested//page//index.html', '/nested%2F%2Fpage/', '/nested/%2f/page%2F%2Findex.html']) {
+    for (const route of ['/nested//page', '/nested///page/', '/nested//page//', '/nested//page//index.html', '/nested%2F%2Fpage/', '/nested/%2f/page%2F%2Findex.html', '/nested%2F%2F..%2Fnested%2Fpage/']) {
       const response = await page.goto(origin + route + query);
       expect(response!.status()).toBe(200);
       expect(page.url()).toBe(origin + '/nested/page/' + (route.endsWith('index.html') ? 'index.html' : '') + query);

@@ -89,7 +89,7 @@ test('thin-upgrade server preserves directory URL semantics and emitted bytes', 
     await writeFile(path.join(dist, 'nested/page/entry.js'), 'loaded();');
     await writeFile(path.join(dist, 'root.svg'), '<svg>root</svg>');
     const query = '?next=a%2fb&tag=one+two&tag=three&empty=';
-    for (const route of ['/nested//page', '/nested///page/', '/nested//page//', '/nested//page//index.html', '/nested%2F%2Fpage/', '/nested/%2f/page%2F%2Findex.html']) {
+    for (const route of ['/nested//page', '/nested///page/', '/nested//page//', '/nested//page//index.html', '/nested%2F%2Fpage/', '/nested/%2f/page%2F%2Findex.html', '/nested%2F%2F..%2Fnested%2Fpage/']) {
       const expected = '/nested/page/' + (route.endsWith('index.html') ? 'index.html' : '');
       for (const suffix of [query, '?']) {
         const redirect = await fetch(base + route + suffix, { redirect: 'manual' });
