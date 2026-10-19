@@ -13,21 +13,24 @@ export function createThinUpgradeServer(directory) {
     try {
       const url = new URL(request.url, 'http://127.0.0.1:4390');
       const pathname = decodeURIComponent(url.pathname);
-      // A decoded separator must also be visible to browser URL resolution.
-      // Preserve all other escapes and never turn a redirect into a host URL.
+      // Browser and filesystem resolution must use the same path segments.
+      // Preserve other escapes and reject host paths before collapsing slashes.
       assert(!pathname.includes('\\'));
-      let canonical = url.pathname.replace(/%2f/gi, '/');
+      const canonical = url.pathname.replace(/%2f/gi, '/');
       assert(!canonical.startsWith('//'));
+      const location = new URL(url);
+      location.pathname = canonical;
+      assert(!location.pathname.startsWith('//'));
+      // Collapse before final dot-segment normalization, as path.resolve does.
+      location.pathname = canonical.replace(/\/{2,}/g, '/');
+      assert(!location.pathname.startsWith('//'));
       let file = path.resolve(dist, '.' + pathname);
       assert(file.startsWith(dist + path.sep) || file === dist);
       if ((await stat(file)).isDirectory()) {
-        if (!canonical.endsWith('/')) canonical += '/';
+        if (!location.pathname.endsWith('/')) location.pathname += '/';
         file = path.join(file, 'index.html');
       }
-      if (canonical !== url.pathname) {
-        const location = new URL(url);
-        location.pathname = canonical;
-        assert(!location.pathname.startsWith('//'));
+      if (location.pathname !== url.pathname) {
         response.writeHead(301, { Location: location.href.slice(location.origin.length), 'Cache-Control': 'no-store, no-transform' });
         response.end();
         return;

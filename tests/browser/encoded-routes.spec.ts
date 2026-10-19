@@ -38,3 +38,33 @@ test('encoded nested routes preserve the document base and resource bytes', asyn
     await rm(dist, { recursive: true, force: true });
   }
 });
+
+test('repeated slash routes load relative resources from the canonical document base', async ({ page }) => {
+  test.setTimeout(20_000);
+  const dist = await mkdtemp(path.join(tmpdir(), 'still-repeated-browser-'));
+  const server = createThinUpgradeServer(dist);
+  try {
+    await mkdir(path.join(dist, 'nested/page'), { recursive: true });
+    await writeFile(path.join(dist, 'nested/page/index.html'), '<!doctype html><title>Repeated slashes</title><img src="../../root.svg"><script src="./entry.js"></script>');
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="19" height="13"><rect width="19" height="13"/></svg>';
+    await writeFile(path.join(dist, 'root.svg'), svg);
+    await writeFile(path.join(dist, 'nested/page/entry.js'), 'document.documentElement.dataset.loaded = "canonical";');
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const query = '?next=a%2fb&tag=one+two&tag=three&empty=';
+    for (const route of ['/nested//page', '/nested///page/', '/nested//page//', '/nested//page//index.html', '/nested%2F%2Fpage/', '/nested/%2f/page%2F%2Findex.html', '/nested%2F%2F..%2Fnested%2Fpage/']) {
+      const response = await page.goto(origin + route + query);
+      expect(response!.status()).toBe(200);
+      expect(page.url()).toBe(origin + '/nested/page/' + (route.endsWith('index.html') ? 'index.html' : '') + query);
+      await expect(page.locator('html')).toHaveAttribute('data-loaded', 'canonical');
+      await expect.poll(() => page.locator('img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(19);
+      expect(await page.locator('img').evaluate((img: HTMLImageElement) => img.currentSrc)).toBe(origin + '/root.svg');
+      expect(await (await page.request.get(origin + '/root.svg')).text()).toBe(svg);
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    await rm(dist, { recursive: true, force: true });
+  }
+});
