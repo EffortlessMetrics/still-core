@@ -21,7 +21,8 @@ export async function compatibleOutput(directory, { worker = false } = {}) {
   const files = await snapshot(directory);
   const css = Object.keys(files).filter(file => file.endsWith('.css'));
   assert.equal(css.length, 1, 'Expected the single bundled Still/consumer stylesheet');
-  const result = {};
+  // Preserve literal filenames, including the root __proto__ asset.
+  const result = Object.create(null);
   const normalizeUrl = url => url === '/' + css[0] ? '/__stylesheet__.css' : url;
   const normalize = html => normalizeHtml(html, css[0]);
   for (const [file, hash] of Object.entries(files)) {
@@ -75,5 +76,5 @@ export async function compatibleOutput(directory, { worker = false } = {}) {
     result['reading-worker.js'] = sha256(program);
     result['offline-receipt.json'] = sha256(JSON.stringify({ ...receipt, revision: '__revision__', bytes: 'validated emitted corpus', urls: normalizedUrls }));
   }
-  return result;
+  return { ...result };
 }

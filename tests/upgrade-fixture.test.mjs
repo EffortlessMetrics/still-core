@@ -1,10 +1,66 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm, symlink } from 'node:fs/promises';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { authenticateFixture, authenticateArchive, assertUpgradeScope, fixture, sha256, frozenRelocationFiles } from '../scripts/upgrade-fixture.mjs';
+import { authenticateFixture, authenticateArchive, assertUpgradeScope, fixture, sha256, frozenRelocationFiles, snapshot } from '../scripts/upgrade-fixture.mjs';
+
+test('snapshots include complete trees and exclude only opted-in consumer-root generated paths', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'still-snapshot-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const expected = { 'package.json': sha256('manifest'), ['__proto__']: sha256('root prototype file') };
+  const source = { ...expected };
+  await writeFile(path.join(directory, 'package.json'), 'manifest');
+  await writeFile(path.join(directory, '__proto__'), 'root prototype file');
+  for (const name of ['dist', 'node_modules', '.astro']) {
+    for (const prefix of ['', 'src/pages/', 'public/assets/']) {
+      for (const leaf of ['index.html', '__proto__']) {
+        const file = prefix + name + '/' + leaf;
+        await mkdir(path.dirname(path.join(directory, file)), { recursive: true });
+        await writeFile(path.join(directory, file), file);
+        expected[file] = sha256(file);
+        if (prefix) source[file] = expected[file];
+      }
+    }
+  }
+  assert.deepEqual(await snapshot(directory), expected, 'Output/package snapshots must include all names');
+  assert.deepEqual(await snapshot(directory, { ignoreGenerated: true }), source, 'Source snapshots exclude only generated root paths');
+  await symlink(directory, path.join(directory, 'src/pages/nested-link'), 'junction');
+  await assert.rejects(snapshot(directory, { ignoreGenerated: true }), /must not contain symlinks/);
+});
+
+test('upgrade scope rejects changes beneath nested generated-looking source paths', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'still-source-scope-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const metadata = ['package.json', 'package-lock.json', 'STARTER-DELIVERY.json'];
+  for (const file of metadata) await writeFile(path.join(directory, file), 'original');
+  for (const name of ['dist', 'node_modules', '.astro']) {
+    const file = path.join(directory, 'src/pages', name, 'index.astro');
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, 'original');
+  }
+  const before = await snapshot(directory, { ignoreGenerated: true });
+  for (const file of metadata) await writeFile(path.join(directory, file), 'upgraded');
+  await mkdir(path.join(directory, 'vendor'));
+  await writeFile(path.join(directory, 'vendor/new.tgz'), 'new archive');
+  assertUpgradeScope(before, await snapshot(directory, { ignoreGenerated: true }), 'vendor/new.tgz');
+  for (const name of ['dist', 'node_modules', '.astro']) {
+    const file = path.join(directory, 'src/pages', name, 'index.astro');
+    await writeFile(file, 'changed consumer content');
+    const changed = await snapshot(directory, { ignoreGenerated: true });
+    assert.throws(() => assertUpgradeScope(before, changed, 'vendor/new.tgz'), /Only Still pin/);
+    await rm(file);
+    const removed = await snapshot(directory, { ignoreGenerated: true });
+    assert.throws(() => assertUpgradeScope(before, removed, 'vendor/new.tgz'), /Only Still pin/);
+    await writeFile(file, 'original');
+    const addition = path.join(path.dirname(file), 'added.astro');
+    await writeFile(addition, 'added consumer content');
+    const added = await snapshot(directory, { ignoreGenerated: true });
+    assert.throws(() => assertUpgradeScope(before, added, 'vendor/new.tgz'), /Only the new Still archive/);
+    await rm(addition);
+  }
+});
 
 test('source boundary rejects an allowlisted fixture archive without provenance', async () => {
   const root = path.resolve(fixture, '../../..');
@@ -69,6 +125,37 @@ test('upgrade rejects consumer content, configuration, notice changes and stray 
     assert.throws(() => assertUpgradeScope(before, missing, 'vendor/new.tgz'), /Only Still pin/);
   }
   assert.throws(() => assertUpgradeScope(before, { ...after, 'stray.txt': 'k' }, 'vendor/new.tgz'), /Only the new Still archive/);
+});
+
+test('upgrade snapshots retain prototype-named files and reject changed, removed and added bytes', async () => {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'still-prototype-source-'));
+  try {
+    const names = ['__proto__', 'constructor', 'toString', 'assets/__proto__'];
+    await mkdir(path.join(temporary, 'assets'));
+    for (const file of ['package.json', 'package-lock.json', 'STARTER-DELIVERY.json', ...names]) {
+      await writeFile(path.join(temporary, file), 'original ' + file);
+    }
+    const before = await snapshot(temporary);
+    assert.equal(Object.getPrototypeOf(before), Object.prototype, 'Preserve the ordinary record contract');
+    const upgraded = files => ({ ...files, 'package.json': 'new pin', 'package-lock.json': 'new lock', 'STARTER-DELIVERY.json': 'new receipt', 'vendor/new.tgz': 'new archive' });
+    assertUpgradeScope(before, upgraded(before), 'vendor/new.tgz');
+    for (const file of names) {
+      assert(Object.hasOwn(before, file), 'Snapshot must own ' + file);
+      assert.equal(before[file], sha256('original ' + file));
+      await writeFile(path.join(temporary, file), 'changed');
+      const changed = await snapshot(temporary);
+      assert.equal(changed[file], sha256('changed'));
+      assert.throws(() => assertUpgradeScope(before, upgraded(changed), 'vendor/new.tgz'), /Only Still pin/);
+      await rm(path.join(temporary, file));
+      const removed = await snapshot(temporary);
+      assert.equal(Object.hasOwn(removed, file), false);
+      assert.throws(() => assertUpgradeScope(before, upgraded(removed), 'vendor/new.tgz'), /Only Still pin/);
+      await writeFile(path.join(temporary, file), 'original ' + file);
+      const restored = await snapshot(temporary);
+      assert.deepEqual(restored, before);
+      assert.throws(() => assertUpgradeScope(removed, upgraded(restored), 'vendor/new.tgz'), /Only the new Still archive/);
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 
 test('frozen relocation authenticates its added changelog without current declarations', async () => {
