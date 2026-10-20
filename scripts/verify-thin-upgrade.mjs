@@ -5,11 +5,12 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { authenticateFixture, fixture, root, stillName, sha256, integrity, json, run, snapshot, assertUpgradeScope, verifyInstalled, frozenRelocationFiles } from './upgrade-fixture.mjs';
 import { compatibleOutput } from './compatible-output.mjs';
-import { assertLayoutRuntimeDelta, layoutReferenceOutput } from './layout-runtime-delta.mjs';
+import { assertLayoutRuntimeDelta, hasLayoutRecovery, layoutReferenceOutput } from './layout-runtime-delta.mjs';
 
 const provenance = await authenticateFixture();
 run(process.execPath, ['scripts/audit-boundary.mjs'], root);
 const temporary = await mkdtemp(path.join(tmpdir(), 'still-thin-upgrade-'));
+let preserveTemporary = false;
 try {
   const baseline = path.join(temporary, 'baseline');
   const relocated = path.join(temporary, 'relocated');
@@ -130,6 +131,9 @@ try {
   assert.deepEqual(reference.output, await compatibleOutput(path.join(baseline, 'dist'), { worker: true }), 'Feature output changes only stylesheet bytes/URLs and the browser-qualified digest worker');
   assert.notEqual(output['reading-worker.js'], baselineOutput['reading-worker.js'], 'Changed CSS bytes must regenerate the output-digest worker');
   console.log(JSON.stringify({ fixtureSource: provenance.starter.commit, historicalSource: provenance.historicalStill.commit, candidateSource: newDelivery.archives[stillName].sourceCommit, historicalArchiveMatchesAcceptedBusiness: provenance.historicalStill.matchesAcceptedBusinessArchive, reports, changed: ['package.json', 'STARTER-DELIVERY.json', 'package-lock.json'], addedArchive: freshFile, layoutRuntimeDelta: layoutDelta, productionOutputRestoration: 'passed', historicalLayoutComponentRuntimeAndExports: 'unchanged', existingCssPrefix: 'unchanged', runtimeFiles: expectedFiles.filter(file => file.endsWith('.astro') || file.endsWith('.css')).length, exports: Object.keys(currentManifest.exports).length, contentStyleGeometry: 'passed', geometrySha256: sha256(await readFile(geometryFile)), frozenRelocationOutputAndWorkerParity: 'passed', historicalLayoutStylesheetAndDigestWorkerChange: 'passed', outputFiles: Object.keys(output).length, outputInventorySha256: sha256(Buffer.from(JSON.stringify(Object.entries(output).sort()))), workerSha256: output['reading-worker.js'], hostedAcceptance: 'not run', publication: 'not performed' }, null, 2));
+} catch (error) {
+  preserveTemporary = hasLayoutRecovery(error);
+  throw error;
 } finally {
-  await rm(temporary, { recursive: true, force: true });
+  if (!preserveTemporary) await rm(temporary, { recursive: true, force: true });
 }
