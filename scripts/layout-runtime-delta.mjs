@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { run, snapshot, sha256, stillName } from './upgrade-fixture.mjs';
 import { compatibleOutput } from './compatible-output.mjs';
@@ -26,25 +26,48 @@ export async function layoutReferenceOutput(consumer, historical, options = {}) 
   const source = assertLayoutRuntimeDelta(candidate, historical);
   const output = await snapshot(path.join(consumer, 'dist'));
   const consumerSource = await snapshot(consumer);
+  // Prepare both complete files before replacing the installed Layout. A failed
+  // write must never truncate the only production copy, including on recovery.
+  const temporary = await mkdtemp(path.join(path.dirname(layout), '.still-layout-'));
+  const production = path.join(temporary, 'production.astro');
+  const historicalLayout = path.join(temporary, 'historical.astro');
+  let restorationPending = false;
   let reference;
   const failures = [];
   try {
-    await writeFile(layout, historical);
+    await copyFile(layout, production);
+    assert.deepEqual(await readFile(production), candidate, 'Complete production Layout backup');
+    await copyFile(layout, historicalLayout);
+    await writeFile(historicalLayout, historical);
+    await rename(historicalLayout, layout);
+    restorationPending = true;
     run('npm', ['run', 'build'], consumer);
     reference = await compatibleOutput(path.join(consumer, 'dist'), options);
   } catch (error) {
     failures.push(error);
   }
-  try {
-    await writeFile(layout, candidate);
+  if (restorationPending) try {
+    await rename(production, layout);
+    restorationPending = false;
     run('npm', ['run', 'build'], consumer);
     assert.deepEqual(await readFile(layout), candidate, 'Installed production Layout restored');
     assert.deepEqual(await snapshot(path.join(consumer, 'dist')), output, 'Production output restored byte-for-byte');
     assert.deepEqual(await snapshot(consumer), consumerSource, 'Reference builds preserve consumer source, pins and lock');
   } catch (error) {
+    if (restorationPending) {
+      const recovery = new Error('Production Layout restoration failed; recover ' + production + ' to ' + layout + ' before retrying', { cause: error });
+      recovery.recoveryLayout = production;
+      failures.push(recovery);
+    } else failures.push(error);
+  }
+  // A failed restoration rename leaves its authenticated backup available for
+  // explicit recovery. Never delete that last complete production copy.
+  if (!restorationPending) try {
+    await rm(temporary, { recursive: true, force: true });
+  } catch (error) {
     failures.push(error);
   }
   if (failures.length === 1) throw failures[0];
-  if (failures.length > 1) throw new AggregateError(failures, 'Reference qualification and production restoration both failed');
+  if (failures.length > 1) throw new AggregateError(failures, 'Reference qualification, production restoration or cleanup failed');
   return { output: reference, source };
 }
