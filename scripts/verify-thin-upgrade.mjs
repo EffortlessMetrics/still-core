@@ -17,7 +17,7 @@ try {
   await mkdir(baseline);
   run('tar', ['-xf', path.join(fixture, provenance.starter.archive), '-C', baseline], root);
   const archivedDelivery = await json(path.join(baseline, 'STARTER-DELIVERY.json'));
-  const original = await snapshot(baseline);
+  const original = await snapshot(baseline, { ignoreGenerated: true });
   const historicalFile = 'vendor/effortlessmetrics-still-0.2.0.tgz';
   await copyFile(path.join(fixture, provenance.historicalStill.archive), path.join(baseline, historicalFile));
 
@@ -44,7 +44,7 @@ try {
   }
 
   await pin(baseline, historicalFile, '0.2.0', provenance.historicalStill.commit);
-  assertUpgradeScope(original, await snapshot(baseline), historicalFile);
+  assertUpgradeScope(original, await snapshot(baseline, { ignoreGenerated: true }), historicalFile);
   await cp(baseline, relocated, { recursive: true });
   const relocationFile = archivedDelivery.archives[stillName].file;
   await pin(relocated, relocationFile, '0.2.1', archivedDelivery.sourceCommits['still-core']);
@@ -61,8 +61,8 @@ try {
   await pin(candidate, freshFile, packed.version, run('git', ['rev-parse', 'HEAD'], root, process.env, true).trim());
   const expectedFiles = (await json(path.join(root, 'source-files.json'))).filter(file => file.startsWith('packages/still/')).map(file => file.slice(15)).sort();
   assert.deepEqual(packed.files.map(file => file.path).sort(), expectedFiles, 'Exact producer payload allowlist');
-  const before = await snapshot(baseline);
-  const after = await snapshot(candidate);
+  const before = await snapshot(baseline, { ignoreGenerated: true });
+  const after = await snapshot(candidate, { ignoreGenerated: true });
   assertUpgradeScope(before, after, freshFile);
   const oldManifest = await json(path.join(baseline, 'package.json'));
   const newManifest = await json(path.join(candidate, 'package.json'));
@@ -87,7 +87,7 @@ try {
   for (const file of frozenRelocationFiles(provenance)) relocationRecord.files[file] = sha256(execFileSync('tar', ['-xOf', relocationArchive, 'package/' + file]));
   const reports = [];
   for (const [name, consumer, record] of [['baseline', baseline, provenance.historicalStill], ['relocated', relocated, relocationRecord], ['candidate', candidate, candidateRecord]]) {
-    const frozen = await snapshot(consumer);
+    const frozen = await snapshot(consumer, { ignoreGenerated: true });
     run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
     const installed = await verifyInstalled(consumer, stillName, record);
     assert.equal(installed.manifest.repository.url, name === 'baseline' ? 'git+https://github.com/EffortlessMetrics/still.git' : 'git+https://github.com/EffortlessMetrics/still-core.git');
@@ -99,7 +99,7 @@ try {
     const geometry = path.join(temporary, name + '-geometry.json');
     for (const script of ['check', 'build', 'verify:licenses', 'test:licenses']) run('npm', ['run', script], consumer);
     run('npm', ['run', 'test:browser'], root, { ...process.env, STILL_PACKED_CONSUMER: consumer, STILL_THIN_UPGRADE: '1', STILL_UPGRADE_SNAPSHOT: geometry });
-    assert.deepEqual(await snapshot(consumer), frozen, 'Frozen install and qualification must not rewrite source or lock');
+    assert.deepEqual(await snapshot(consumer, { ignoreGenerated: true }), frozen, 'Frozen install and qualification must not rewrite source or lock');
     reports.push({ name, version: installed.manifest.version, sha256: installed.sha256, install: 'passed', payload: 'passed', types: 'passed', build: 'passed', licenses: 'passed', browser: 'passed' });
   }
   const historicalManifest = JSON.parse(execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/package.json'], { encoding: 'utf8' }));
