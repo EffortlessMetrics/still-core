@@ -32,9 +32,15 @@ test('minimal consumer upgrade rejects real prototype-named source additions', a
       const after = await source();
       assert.equal(Object.hasOwn(before, file), false);
       assert(Object.hasOwn(after, file), 'Snapshot must own ' + file);
-      assert.throws(() => assertConsumerUpgradeScope(before, after, archive), {
-        code: 'ERR_ASSERTION', actual: [file, archive], expected: [archive], operator: 'deepStrictEqual',
-      });
+      for (const inventory of [after, Object.fromEntries(Object.entries(after).reverse())]) {
+        assert.throws(() => assertConsumerUpgradeScope(before, inventory, archive), error => {
+          assert.equal(error.code, 'ERR_ASSERTION');
+          assert.equal(error.operator, 'deepStrictEqual');
+          assert.deepEqual([...error.actual].sort(), [file, archive].sort());
+          assert.deepEqual(error.expected, [archive]);
+          return true;
+        });
+      }
     } finally { await rm(path.join(directory, file)); }
     assert.deepEqual(await source(), allowed);
   });
