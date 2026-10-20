@@ -1,5 +1,58 @@
 import { test, expect } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
+
+test('header keyboard focus stays inside the viewport with enlarged root text', async ({ page }, testInfo) => {
+  const observations = [];
+  await page.route('**/*', route => new URL(route.request().url()).origin === 'http://127.0.0.1:4390' ? route.continue() : route.abort());
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    for (const width of [1440, 1366, 1101, 1100, 761, 760, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const rootSize of [16, 32]) {
+        await page.goto('/');
+        await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, rootSize);
+        await page.evaluate(() => document.fonts.ready);
+        const header = page.locator('header');
+        if (width >= 1101 && rootSize === 16) expect((await header.boundingBox())!.height).toBe(88);
+        await page.keyboard.press('Tab');
+        await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
+        for (const control of await header.locator('a, button').all()) {
+          await page.keyboard.press('Tab');
+          await expect(control).toBeFocused();
+          const bounds = await control.evaluate(element => {
+            const box = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            const extent = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+            return { label: element.textContent?.trim() || element.getAttribute('aria-label'),
+              fontSize: style.fontSize, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth,
+              outlineColor: style.outlineColor, focusVisible: element.matches(':focus-visible'),
+              left: box.left - extent, right: box.right + extent,
+              top: box.top - extent, bottom: box.bottom + extent };
+          });
+          observations.push({ colorScheme, width, rootSize, ...bounds });
+          expect(bounds.focusVisible).toBe(true);
+          expect(bounds.outlineStyle).toBe('solid');
+          expect(parseFloat(bounds.outlineWidth)).toBeGreaterThan(0);
+          expect(bounds.outlineColor).not.toBe('rgba(0, 0, 0, 0)');
+          expect(bounds.left).toBeGreaterThanOrEqual(0);
+          expect(bounds.right).toBeLessThanOrEqual(width);
+          expect(bounds.top).toBeGreaterThanOrEqual(0);
+          expect(bounds.bottom).toBeLessThanOrEqual(900);
+        }
+      }
+    }
+  }
+  await testInfo.attach('header-focus-bounds', { body: JSON.stringify(observations, null, 2), contentType: 'application/json' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Workshops', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/workshops\/$/);
+});
+
 test('complete neutral pages render, stack and preserve large reading text', async ({ page }) => {
   await page.route('**/*', route => new URL(route.request().url()).origin === 'http://127.0.0.1:4390' ? route.continue() : route.abort());
   for (const width of [1440, 390, 320]) {

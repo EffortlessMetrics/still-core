@@ -448,3 +448,8 @@ h1, h2, h3 { overflow-wrap: anywhere; }
     mask-image: linear-gradient(to right, transparent, #000 50%, transparent);
   }
 }
+
+/* Reserve the 3px outline plus its 5px offset as wide-screen text grows. */
+@media (min-width: 1101px) {
+  header { padding-top: 8px; padding-bottom: 8px; }
+}
