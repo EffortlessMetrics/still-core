@@ -1,7 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+async function historicalHeaderFixture() {
+  if (!process.env.STILL_THIN_UPGRADE || !process.env.STILL_PACKED_CONSUMER) return false;
+  const manifest = JSON.parse(await readFile(resolve(process.env.STILL_PACKED_CONSUMER, 'node_modules/@effortlessmetrics/still/package.json'), 'utf8'));
+  return ['0.2.0', '0.2.1'].includes(manifest.version);
+}
 
 test('header keyboard focus stays inside the viewport with enlarged root text', async ({ page }, testInfo) => {
+  test.skip(await historicalHeaderFixture(), 'Frozen historical headers use the explicit clipping control below');
   const observations = [];
   await page.route('**/*', route => new URL(route.request().url()).origin === 'http://127.0.0.1:4390' ? route.continue() : route.abort());
   for (const colorScheme of ['light', 'dark'] as const) {
@@ -51,6 +59,21 @@ test('header keyboard focus stays inside the viewport with enlarged root text', 
   await expect(page.getByRole('link', { name: 'Workshops', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/workshops\/$/);
+});
+
+test('historical header control reproduces the enlarged-text clipping', async ({ page }) => {
+  test.skip(!await historicalHeaderFixture(), 'Only authenticated frozen 0.2.0 and 0.2.1 upgrade fixtures');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+  await page.evaluate(() => document.fonts.ready);
+  for (let n = 0; n < 3; n++) await page.keyboard.press('Tab');
+  const link = page.getByRole('link', { name: 'Workshops', exact: true });
+  await expect(link).toBeFocused();
+  expect(await link.evaluate(element => {
+    const style = getComputedStyle(element);
+    return element.getBoundingClientRect().top - parseFloat(style.outlineWidth) - parseFloat(style.outlineOffset);
+  })).toBe(-5);
 });
 
 test('complete neutral pages render, stack and preserve large reading text', async ({ page }) => {
