@@ -7,6 +7,13 @@ import { compatibleOutput } from './compatible-output.mjs';
 const oldWrite = "localStorage.setItem(document.body.dataset.themeKey || 'site-theme', theme)";
 const newWrite = "localStorage.setItem(document.body.dataset.themeKey ?? 'site-theme', theme)";
 
+// Callers must retain their enclosing temporary consumer while an authenticated
+// production backup is needed for explicit recovery, including dual failures.
+export function hasLayoutRecovery(error) {
+  return typeof error?.recoveryLayout === 'string' ||
+    (error instanceof AggregateError && error.errors.some(hasLayoutRecovery));
+}
+
 // Authenticate the entire source, not a stripped/normalized script. No other
 // byte, prop, before-paint behavior or fallback is admitted by this exception.
 export function assertLayoutRuntimeDelta(candidate, historical) {

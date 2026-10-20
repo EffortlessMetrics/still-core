@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { chromium } from '@playwright/test';
 import { assertPropRejections } from './minimal-consumer-contract.mjs';
 import { compatibleOutput } from './compatible-output.mjs';
-import { layoutReferenceOutput } from './layout-runtime-delta.mjs';
+import { hasLayoutRecovery, layoutReferenceOutput } from './layout-runtime-delta.mjs';
 import { themeConfiguration } from './layout-theme-browser.mjs';
 import { authenticateArchive, fixture, root, stillName, sha256, json, run, snapshot } from './upgrade-fixture.mjs';
 
@@ -174,6 +174,7 @@ async function qualify(version, archive, expectedFiles, supportsDividers, themeS
   return { version, archiveSha256: sha256(await readFile(archive)), output: await compatibleOutput(path.join(consumer, 'dist')), install: 'passed', exports: 'passed', payload: 'passed', validTypes: 'passed', invalidTypes: 'passed', browserAssetsRuntime: 'passed', dividers: supportsDividers ? 'passed' : 'missing control confirmed', ...browserReport };
 }
 
+let preserveTemporary = false;
 try {
   await cp(source, consumer, { recursive: true });
   await mkdir(path.join(consumer, 'vendor'));
@@ -210,4 +211,7 @@ try {
   assert.deepEqual(candidate.defaultGeometry, baseline.defaultGeometry, 'Default columns, cards, footer, actions and prices remain unchanged');
   for (const report of [baseline, candidate]) { report.defaultGeometrySha256 = sha256(Buffer.from(JSON.stringify(report.defaultGeometry))); delete report.defaultGeometry; }
   console.log(JSON.stringify({ sourceCommit: run('git', ['rev-parse', 'HEAD'], root, process.env, true).trim(), node: process.version, browser: process.env.STILL_BROWSER_EXECUTABLE || 'Playwright bundled Chromium', baseline, candidate, layoutRuntimeDelta: reference.source, productionOutputRestoration: 'passed', dependencyLockOnlyUpgrade: 'passed', historicalLayoutStylesheetOnlyOutputChange: 'passed', defaultCompositionParity: 'passed' }, null, 2));
-} finally { await rm(temporary, { recursive: true, force: true }); }
+} catch (error) {
+  preserveTemporary = hasLayoutRecovery(error);
+  throw error;
+} finally { if (!preserveTemporary) await rm(temporary, { recursive: true, force: true }); }

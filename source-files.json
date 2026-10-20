@@ -101,5 +101,6 @@
   "tests/layout-theme.test.mjs",
   "tests/minimal-consumer-contract.test.mjs",
   "tests/serve-thin-upgrade.test.mjs",
-  "tests/upgrade-fixture.test.mjs"
+  "tests/upgrade-fixture.test.mjs",
+  "tests/verifier-recovery.test.mjs"
 ]
