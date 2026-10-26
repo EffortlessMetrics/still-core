@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstat, readFile, realpath, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -73,9 +74,15 @@ export async function writeQualification({ delivery, root = checkoutRoot, env = 
   async function delivered(file) {
     const location = path.join(destination, file);
     assert.equal(await realpath(location), location, 'Delivered files must not traverse symlinks');
-    assert((await lstat(location)).isFile(), 'Delivered inputs must be regular files');
-    const bytes = await readFile(location);
-    return { bytes, record: { path: file, bytes: bytes.length, sha256: sha256(bytes) } };
+    // Non-blocking open lets descriptor validation reject a FIFO without a writer.
+    const handle = await open(location, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    try {
+      assert((await handle.stat()).isFile(), 'Delivered inputs must be regular files');
+      const bytes = await handle.readFile();
+      return { bytes, record: { path: file, bytes: bytes.length, sha256: sha256(bytes) } };
+    } finally {
+      await handle.close();
+    }
   }
   const receipt = await delivered('consumer/STARTER-DELIVERY.json');
   const manifest = await delivered('consumer/package.json');

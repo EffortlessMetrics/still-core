@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { constants } from 'node:fs';
+import fsPromises from 'node:fs/promises';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { writeQualification } from '../scripts/ci-qualification.mjs';
@@ -160,5 +163,132 @@ test('unsafe archive paths and symlink substitutions cannot enter a qualificatio
   await rm(archive);
   await symlink(outside, archive);
   await assert.rejects(writeQualification(f.options), /must not traverse symlinks/);
+  await f.absent();
+});
+
+test('a path swapped to a symlink after validation cannot substitute the bytes read', async t => {
+  const f = await fixture(t);
+  const target = path.join(f.consumer, 'package.json');
+  const outside = path.join(f.delivery, 'replacement-package.json');
+  const replacement = JSON.stringify({ ...JSON.parse(f.files['package.json']), name: 'substituted-after-validation' });
+  await writeFile(outside, replacement);
+  const originalLstat = fsPromises.lstat;
+  const originalOpen = fsPromises.open;
+  let swapped = false;
+  let opened;
+  async function swap() {
+    assert(!swapped, 'Inject exactly one replacement at the validation/read boundary');
+    swapped = true;
+    await rm(target);
+    await symlink(outside, target);
+  }
+  // Exercise the same seam in the original pathname checker and in the repaired
+  // descriptor checker, without replacing the recorder or its byte-reading code.
+  t.mock.method(fsPromises, 'lstat', async (...args) => {
+    const stat = await originalLstat(...args);
+    if (args[0] === target) await swap();
+    return stat;
+  });
+  t.mock.method(fsPromises, 'open', async (...args) => {
+    const handle = await originalOpen(...args);
+    if (args[0] === target) {
+      opened = handle;
+      const originalStat = handle.stat.bind(handle);
+      t.mock.method(handle, 'stat', async (...statArgs) => {
+        const stat = await originalStat(...statArgs);
+        await swap();
+        return stat;
+      });
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  try {
+    const record = await writeQualification(f.options);
+    assert(swapped, 'Controlled replacement must actually run');
+    assert((await originalLstat(target)).isSymbolicLink());
+    assert.notEqual(digest(replacement), digest(f.files['package.json']));
+    assert.equal(record.delivery.manifest.sha256, digest(f.files['package.json']), 'Read the original validated file, not the substituted symlink target');
+    assert.equal(opened.fd, -1, 'Close the validated descriptor after successful reading');
+    // This controls the recorder read only; it does not freeze a later upload.
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+});
+
+test('a final symlink introduced after realpath is rejected when no-follow is supported', async t => {
+  if (constants.O_NOFOLLOW === undefined) return t.skip('This platform retains the existing realpath safeguard without O_NOFOLLOW');
+  const f = await fixture(t);
+  const target = path.join(f.consumer, 'package.json');
+  const outside = path.join(f.delivery, 'replacement-package.json');
+  await writeFile(outside, f.files['package.json']);
+  const originalRealpath = fsPromises.realpath;
+  let swapped = false;
+  t.mock.method(fsPromises, 'realpath', async (...args) => {
+    const resolved = await originalRealpath(...args);
+    if (args[0] === target) {
+      swapped = true;
+      await rm(target);
+      await symlink(outside, target);
+    }
+    return resolved;
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(writeQualification(f.options), { code: 'ELOOP' });
+    assert(swapped, 'Introduce the symlink after realpath but before open');
+    await f.absent();
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+});
+
+test('opened descriptors close after type-validation and read errors', async t => {
+  for (const failure of ['type', 'read']) {
+    const f = await fixture(t);
+    const target = path.join(f.consumer, 'package.json');
+    const directoryStat = await fsPromises.stat(f.consumer);
+    const injected = new Error('controlled descriptor read failure');
+    const originalOpen = fsPromises.open;
+    let opened;
+    t.mock.method(fsPromises, 'open', async (...args) => {
+      const handle = await originalOpen(...args);
+      if (args[0] === target) {
+        opened = handle;
+        // Inject either a non-file descriptor classification or a failed read.
+        t.mock.method(handle, failure === 'type' ? 'stat' : 'readFile', async () => {
+          if (failure === 'type') return directoryStat;
+          throw injected;
+        });
+      }
+      return handle;
+    });
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(writeQualification(f.options), failure === 'type' ? /Delivered inputs must be regular files/ : error => error === injected);
+      assert.equal(opened.fd, -1, 'Close the descriptor before reporting a validation/read failure');
+      await f.absent();
+    } finally {
+      t.mock.restoreAll();
+      syncBuiltinESMExports();
+    }
+  }
+});
+
+test('a FIFO input is rejected without waiting for a writer', async t => {
+  if (process.platform === 'win32') return t.skip('POSIX FIFO control');
+  const f = await fixture(t);
+  const target = path.join(f.consumer, 'package.json');
+  await rm(target);
+  execFileSync('mkfifo', [target]);
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    'const { writeQualification } = await import(process.argv[1]); await writeQualification(JSON.parse(process.argv[2]));',
+    new URL('../scripts/ci-qualification.mjs', import.meta.url).href, JSON.stringify(f.options)],
+    { encoding: 'utf8', timeout: 2000 });
+  assert.ifError(result.error);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Delivered inputs must be regular files/);
   await f.absent();
 });
