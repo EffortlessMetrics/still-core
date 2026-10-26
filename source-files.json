@@ -1,6 +1,7 @@
 [
   ".github/workflows/verify.yml",
   ".gitignore",
+  "AGENTS.md",
   "LICENSE",
   "LICENSE-APACHE",
   "LICENSE-MIT",
@@ -47,6 +48,7 @@
   "packages/still/src/styles.css",
   "playwright.config.ts",
   "scripts/audit-boundary.mjs",
+  "scripts/ci-qualification.mjs",
   "scripts/compatible-output.mjs",
   "scripts/create-starter.mjs",
   "scripts/layout-runtime-delta.mjs",
@@ -85,6 +87,7 @@
   "starter/tsconfig.json",
   "tests/browser/design.spec.ts",
   "tests/browser/encoded-routes.spec.ts",
+  "tests/ci-qualification.test.mjs",
   "tests/compatible-output.test.mjs",
   "tests/contracts.test.mjs",
   "tests/fixtures/minimal-consumer/public/consumer.svg",
