@@ -1,7 +1,7 @@
 // Local test server: preserves emitted bytes and exposes network freshness in a header.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.json': 'application/json', '.txt': 'text/plain' };
@@ -26,9 +26,13 @@ export function createThinUpgradeServer(directory) {
       assert(!location.pathname.startsWith('//'));
       let file = path.resolve(dist, '.' + pathname);
       assert(file.startsWith(dist + path.sep) || file === dist);
+      const realDist = await realpath(dist);
+      const insideOutput = resolved => resolved === realDist || resolved.startsWith(realDist + path.sep);
+      assert(insideOutput(await realpath(file)));
       if ((await stat(file)).isDirectory()) {
         if (!location.pathname.endsWith('/')) location.pathname += '/';
         file = path.join(file, 'index.html');
+        assert(insideOutput(await realpath(file)));
       }
       if (location.pathname !== url.pathname) {
         response.writeHead(301, { Location: location.href.slice(location.origin.length), 'Cache-Control': 'no-store, no-transform' });
