@@ -10,5 +10,6 @@ const preference = matchMedia('(prefers-color-scheme: dark)');
 const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && preference.matches);
 const sync = () => button?.setAttribute('aria-pressed', String(isDark()));
 sync(); preference.addEventListener('change', sync);
+window.addEventListener('pageshow', event => {if (!event.persisted) return; try {const saved = localStorage.getItem(document.body.dataset.themeKey ?? 'site-theme'); if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved; else delete document.documentElement.dataset.theme;} catch {} sync();});
 button?.addEventListener('click', () => {const theme = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; try {localStorage.setItem(document.body.dataset.themeKey ?? 'site-theme', theme);} catch {} sync();});
 </script></body></html>

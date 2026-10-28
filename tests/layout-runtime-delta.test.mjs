@@ -16,6 +16,7 @@ test('runtime qualification admits exactly the reviewed Layout deltas', () => {
   assert.throws(() => assertLayoutRuntimeDelta(historical, historical), /Only the reviewed/);
   for (const replacement of [
     candidate.toString().replace("?? 'site-theme'", "?? 'different-key'"),
+    candidate.toString().replace("if (!event.persisted) return;", "if (event.persisted) return;"),
     candidate.toString().replace("faviconPath = import.meta.env.BASE_URL", "faviconPath = import.meta.env.OTHER_URL"),
     candidate.toString().replace("faviconPath = import.meta.env.BASE_URL.replace(/\\/+$/, '') + '/favicon.svg'", "faviconPath = '/favicon.svg'"),
     candidate.toString().replace("canonicalPath = '/'", "canonicalPath = '/changed/'"),

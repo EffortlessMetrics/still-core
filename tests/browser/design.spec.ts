@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, chromium } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 test('complete neutral pages render, stack and preserve large reading text', async ({ page }) => {
   await page.route('**/*', route => new URL(route.request().url()).origin === 'http://127.0.0.1:4390' ? route.continue() : route.abort());
@@ -25,6 +25,30 @@ test('theme supports persistence, keyboard and system preference', async ({ page
   await page.evaluate(() => localStorage.clear());
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.reload(); await expect(button).toHaveAttribute('aria-pressed', 'true');
+});
+test.describe('back-forward cache', () => {
+  test.skip(!!process.env.STILL_THIN_UPGRADE || !!process.env.STILL_PACKED_CONSUMER, 'Historical consumers retain their original runtime');
+  test('back-forward restoration reflects the theme selected on the next page', async () => {
+      const browser = await chromium.launch({ ...(process.env.STILL_BROWSER_EXECUTABLE ? { executablePath: process.env.STILL_BROWSER_EXECUTABLE } : {}), ignoreDefaultArgs: ['--disable-back-forward-cache'] });
+      try {
+      const page = await browser.newPage();
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.addInitScript(() => {
+        window.addEventListener('pageshow', event => { (window as any).restoredFromCache = event.persisted; });
+      });
+      await page.goto('http://127.0.0.1:4390/');
+      await page.getByRole('link', { name: 'Explore workshops' }).click();
+      await page.getByRole('button', { name: 'Switch light or dark theme' }).click();
+      await page.evaluate(() => history.back());
+      await expect(page).toHaveURL('http://127.0.0.1:4390/');
+      expect(await page.evaluate(() => (window as any).restoredFromCache)).toBe(true);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+      await expect(page.getByRole('button', { name: 'Switch light or dark theme' })).toHaveAttribute('aria-pressed', 'true');
+      await page.getByRole('button', { name: 'Switch light or dark theme' }).click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await expect(page.getByRole('button', { name: 'Switch light or dark theme' })).toHaveAttribute('aria-pressed', 'false');
+      } finally { await browser.close(); }
+  });
 });
 test('service prices align on desktop and stack on mobile without a live form', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 }); await page.goto('/workshops/');

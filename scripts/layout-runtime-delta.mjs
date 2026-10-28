@@ -8,15 +8,17 @@ const oldWrite = "localStorage.setItem(document.body.dataset.themeKey || 'site-t
 const newWrite = "localStorage.setItem(document.body.dataset.themeKey ?? 'site-theme', theme)";
 const oldFavicon = "faviconPath = '/favicon.svg'";
 const newFavicon = "faviconPath = import.meta.env.BASE_URL.replace(/\\/+$/, '') + '/favicon.svg'";
+const syncMarker = "sync(); preference.addEventListener('change', sync);";
+const restoredSync = "window.addEventListener('pageshow', event => {if (!event.persisted) return; try {const saved = localStorage.getItem(document.body.dataset.themeKey ?? 'site-theme'); if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved; else delete document.documentElement.dataset.theme;} catch {} sync();});";
 
-// Authenticate the entire source, admitting only the theme-write and favicon
-// default changes. No other byte or behavior is normalized away.
+// Authenticate the entire source, admitting only the reviewed deltas.
 export function assertLayoutRuntimeDelta(candidate, historical) {
   const original = historical.toString('utf8');
   assert.equal(original.split(oldWrite).length - 1, 1, 'One historical theme write');
   assert.equal(original.split(oldFavicon).length - 1, 1, 'One historical favicon default');
-  const expected = Buffer.from(original.replace(oldWrite, newWrite).replace(oldFavicon, newFavicon));
-  assert.deepEqual(candidate, expected, 'Only the reviewed theme-write and favicon defaults may change');
+  assert.equal(original.split(syncMarker).length - 1, 1, 'One historical theme sync marker');
+  const expected = Buffer.from(original.replace(oldWrite, newWrite).replace(oldFavicon, newFavicon).replace(syncMarker, syncMarker + '\n' + restoredSync));
+  assert.deepEqual(candidate, expected, 'Only the reviewed Layout changes are admitted');
   return { historicalSha256: sha256(historical), candidateSha256: sha256(candidate) };
 }
 
