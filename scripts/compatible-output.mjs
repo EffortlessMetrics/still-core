@@ -27,7 +27,7 @@ function normalizeHtml(html, stylesheet) {
     // Template contents are inert consumer data, not active stylesheet links.
     for (const child of node.childNodes || []) visit(child);
   };
-  visit(parse(html, { sourceCodeLocationInfo: true }));
+  visit(parse(html, { sourceCodeLocationInfo: true, scriptingEnabled: false }));
   for (const [start, end] of replacements.sort((a, b) => b[0] - a[0])) {
     html = html.slice(0, start) + '/__stylesheet__.css' + html.slice(end);
   }

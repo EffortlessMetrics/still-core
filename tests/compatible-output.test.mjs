@@ -150,3 +150,23 @@ test('worker comparison retains copied public HTML digests', async () => {
     assert.notEqual(outputs[0]['reading-worker.js'], outputs[1]['reading-worker.js']);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
+
+test('stylesheet links in noscript normalize without hiding unrelated noscript content', async () => {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'still-noscript-html-'));
+  try {
+    const output = async (css, location, extra = 'same') => {
+      const directory = path.join(temporary, css);
+      await rm(directory, { recursive: true, force: true });
+      await mkdir(path.join(directory, '_astro'), { recursive: true });
+      await writeFile(path.join(directory, '_astro', css), 'body{}');
+      const fallback = `<noscript><link rel="stylesheet" href="/_astro/${css}"></noscript>`;
+      await writeFile(path.join(directory, 'index.html'), `<head>${location === 'head' ? fallback : ''}</head><body>${location === 'body' ? fallback : ''}<p>${extra}</p></body>`);
+      return compatibleOutput(directory);
+    };
+    for (const location of ['head', 'body']) {
+      const baseline = await output('old.css', location);
+      assert.deepEqual(await output('new.css', location), baseline);
+      assert.notDeepEqual(await output('new.css', location, 'changed'), baseline);
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }); }
+});
