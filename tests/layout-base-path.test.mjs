@@ -12,7 +12,7 @@ const layout = fileURLToPath(new URL('../packages/still/src/Layout.astro', impor
 test('default favicon follows Astro base while explicit favicon paths stay unchanged', async () => {
   const project = await mkdtemp(path.join(tmpdir(), 'still-base-'));
   try {
-    await symlink(path.join(root, 'node_modules'), path.join(project, 'node_modules'), 'dir');
+    await symlink(path.join(root, 'node_modules'), path.join(project, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
     await mkdir(path.join(project, 'src/pages'), { recursive: true });
     await copyFile(layout, path.join(project, 'src/Layout.astro'));
     await writeFile(path.join(project, 'src/pages/index.astro'), `---\nimport Layout from '../Layout.astro';\n---\n<Layout title="Test" description="Test" origin="https://example.invalid" />`);
