@@ -5,6 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { authenticateFixture, fixture, root, stillName, sha256, integrity, json, run, snapshot, assertUpgradeScope, verifyInstalled, frozenRelocationFiles } from './upgrade-fixture.mjs';
 import { compatibleOutput } from './compatible-output.mjs';
+import { assertHistoricalExports, assertHistoricalRuntime } from './minimal-consumer-contract.mjs';
 import { assertLayoutRuntimeDelta, assertHeaderRuntimeDelta, layoutReferenceOutput } from './layout-runtime-delta.mjs';
 
 const provenance = await authenticateFixture();
@@ -108,16 +109,8 @@ try {
   const layoutDelta = assertLayoutRuntimeDelta(await readFile(path.join(root, 'packages/still/src/Layout.astro')), historicalLayout);
   const headerDelta = assertHeaderRuntimeDelta(await readFile(path.join(root, 'packages/still/src/Header.astro')), historicalHeader);
   const currentManifest = await json(path.join(root, 'packages/still/package.json'));
-  assert.deepEqual(Object.fromEntries(Object.entries(currentManifest.exports).map(([name, target]) => [name, typeof target === 'string' ? target : target.default])), historicalManifest.exports, 'Public runtime exports remain unchanged');
-  for (const file of expectedFiles.filter(file => file.endsWith('.astro') || file.endsWith('.css'))) {
-    assert.equal(relocationRecord.files[file], provenance.historicalStill.files[file], 'Frozen relocation runtime payload unchanged: ' + file);
-    if (file !== 'src/styles.css') {
-      const historicalReferenceHash = file === 'src/Layout.astro' ? layoutDelta.historicalSha256 : file === 'src/Header.astro' ? headerDelta.historicalSha256 : candidateRecord.files[file];
-      assert.equal(historicalReferenceHash, provenance.historicalStill.files[file], 'Component runtime payload unchanged: ' + file);
-      if (file === 'src/Layout.astro') assert.equal(candidateRecord.files[file], layoutDelta.candidateSha256, 'Exact reviewed Layout delta is packed');
-      if (file === 'src/Header.astro') assert.equal(candidateRecord.files[file], headerDelta.candidateSha256, 'Exact reviewed Header delta is packed');
-    }
-  }
+  assertHistoricalExports(currentManifest.exports, historicalManifest.exports);
+  assertHistoricalRuntime(candidateRecord.files, provenance.historicalStill.files, relocationRecord.files, { 'src/Layout.astro': layoutDelta, 'src/Header.astro': headerDelta });
   const historicalCss = execFileSync('tar', ['-xOf', relocationArchive, 'package/src/styles.css']);
   const currentCss = await readFile(path.join(root, 'packages/still/src/styles.css'));
   assert(currentCss.subarray(0, historicalCss.length).equals(historicalCss), 'Existing CSS bytes remain unchanged; divider rules are appended');
