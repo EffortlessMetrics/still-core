@@ -10,12 +10,14 @@ const candidate = await readFile(new URL('../packages/still/src/Layout.astro', i
 const historicalHeader = execFileSync('tar', ['-xOf', fileURLToPath(new URL('./fixtures/thin-upgrade/still-0.2.0.tar.gz', import.meta.url)), 'package/src/Header.astro']);
 const candidateHeader = await readFile(new URL('../packages/still/src/Header.astro', import.meta.url));
 
-test('runtime qualification admits exactly the reviewed Layout operator delta', () => {
+test('runtime qualification admits exactly the reviewed Layout deltas', () => {
   const hashes = assertLayoutRuntimeDelta(candidate, historical);
   assert.notEqual(hashes.candidateSha256, hashes.historicalSha256);
   assert.throws(() => assertLayoutRuntimeDelta(historical, historical), /Only the reviewed/);
   for (const replacement of [
     candidate.toString().replace("?? 'site-theme'", "?? 'different-key'"),
+    candidate.toString().replace("faviconPath = import.meta.env.BASE_URL", "faviconPath = import.meta.env.OTHER_URL"),
+    candidate.toString().replace("faviconPath = import.meta.env.BASE_URL.replace(/\\/+$/, '') + '/favicon.svg'", "faviconPath = '/favicon.svg'"),
     candidate.toString().replace("canonicalPath = '/'", "canonicalPath = '/changed/'"),
     candidate.toString() + '\n',
   ]) assert.throws(() => assertLayoutRuntimeDelta(Buffer.from(replacement), historical), /Only the reviewed/);

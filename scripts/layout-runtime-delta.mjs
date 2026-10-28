@@ -6,14 +6,17 @@ import { compatibleOutput } from './compatible-output.mjs';
 
 const oldWrite = "localStorage.setItem(document.body.dataset.themeKey || 'site-theme', theme)";
 const newWrite = "localStorage.setItem(document.body.dataset.themeKey ?? 'site-theme', theme)";
+const oldFavicon = "faviconPath = '/favicon.svg'";
+const newFavicon = "faviconPath = import.meta.env.BASE_URL.replace(/\\/+$/, '') + '/favicon.svg'";
 
-// Authenticate the entire source, not a stripped/normalized script. No other
-// byte, prop, before-paint behavior or fallback is admitted by this exception.
+// Authenticate the entire source, admitting only the theme-write and favicon
+// default changes. No other byte or behavior is normalized away.
 export function assertLayoutRuntimeDelta(candidate, historical) {
   const original = historical.toString('utf8');
   assert.equal(original.split(oldWrite).length - 1, 1, 'One historical theme write');
-  const expected = Buffer.from(original.replace(oldWrite, newWrite));
-  assert.deepEqual(candidate, expected, 'Only the reviewed empty-key write operator may change');
+  assert.equal(original.split(oldFavicon).length - 1, 1, 'One historical favicon default');
+  const expected = Buffer.from(original.replace(oldWrite, newWrite).replace(oldFavicon, newFavicon));
+  assert.deepEqual(candidate, expected, 'Only the reviewed theme-write and favicon defaults may change');
   return { historicalSha256: sha256(historical), candidateSha256: sha256(candidate) };
 }
 
