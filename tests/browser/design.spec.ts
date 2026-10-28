@@ -68,6 +68,25 @@ test('keyboard navigation and preview metadata work through the public compositi
   expect(await sitemap.text()).toContain('https://clear-current.example/project-support/');
 });
 
+test('skip link remains hidden and usable with enlarged text', async ({ page }) => {
+  test.skip(!!process.env.STILL_THIN_UPGRADE, 'Historical upgrade controls predate this repair');
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto('/');
+  await page.evaluate(() => { document.documentElement.style.fontSize = '64px'; });
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  const hidden = await skip.boundingBox();
+  expect(hidden!.y + hidden!.height).toBeLessThanOrEqual(0);
+  await page.keyboard.press('Tab');
+  await expect(skip).toBeFocused();
+  const visible = await skip.boundingBox();
+  expect(visible!.x).toBeGreaterThanOrEqual(0);
+  expect(visible!.y).toBeGreaterThanOrEqual(0);
+  expect(visible!.x + visible!.width).toBeLessThanOrEqual(320);
+  expect(visible!.y + visible!.height).toBeLessThanOrEqual(900);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+});
+
 test('theme remains usable when persistence is unavailable and makes no external requests', async ({ page }) => {
   const errors: string[] = [];
   const external: string[] = [];
