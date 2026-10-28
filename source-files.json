@@ -99,6 +99,7 @@
   "tests/fixtures/thin-upgrade/PROVENANCE.json",
   "tests/fixtures/thin-upgrade/starter-source.tar.gz",
   "tests/fixtures/thin-upgrade/still-0.2.0.tar.gz",
+  "tests/header-landmark.test.mjs",
   "tests/layout-runtime-delta.test.mjs",
   "tests/layout-theme.test.mjs",
   "tests/minimal-consumer-contract.test.mjs",
