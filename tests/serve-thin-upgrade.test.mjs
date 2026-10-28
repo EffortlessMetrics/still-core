@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
@@ -131,6 +131,23 @@ test('thin-upgrade server preserves directory URL semantics and emitted bytes', 
       assert(freshness > previous);
       previous = freshness;
     }
+  });
+
+  await t.test('resolved files stay inside the output directory', async () => {
+    const outside = await mkdtemp(path.join(tmpdir(), 'still-outside-'));
+    await writeFile(path.join(outside, 'secret.txt'), 'outside');
+    await writeFile(path.join(outside, 'index.html'), 'outside index');
+    await symlink(path.join(outside, 'secret.txt'), path.join(dist, 'external.txt'));
+    await symlink(outside, path.join(dist, 'external-dir'));
+    await mkdir(path.join(dist, 'linked-index'));
+    await symlink(path.join(outside, 'index.html'), path.join(dist, 'linked-index/index.html'));
+    await symlink(path.join(dist, 'workshops/diagram.svg'), path.join(dist, 'internal.svg'));
+    for (const route of ['/external.txt', '/external-dir/', '/external-dir', '/linked-index/']) {
+      const response = await fetch(base + route, { redirect: 'manual' });
+      assert.equal(response.status, 404, route);
+      assert.equal(response.headers.get('location'), null);
+    }
+    assert.equal(await (await fetch(base + '/internal.svg')).text(), '<svg/>');
   });
 
   await t.test('missing navigation and assets stay 404 instead of returning fallback HTML', async () => {
