@@ -49,18 +49,35 @@ try {
     fixture += `const valid${index}: ComponentProps<typeof C${index}> = ${JSON.stringify(valid)};\n`;
     fixture += `// @ts-expect-error Invalid ${subpath} props must be rejected, never widened to any\nconst invalid${index}: ComponentProps<typeof C${index}> = ${JSON.stringify(invalid)};\nvoid [valid${index}, invalid${index}];\n`;
   }
+  fixture += `const explicitUndefined: ComponentProps<typeof C0> = { title: 'Title', description: 'Description', origin: 'https://example.invalid', themeStorageKey: undefined };\n// @ts-expect-error Storage key must still be a string or undefined\nconst invalidStorageKey: ComponentProps<typeof C0> = { title: 'Title', description: 'Description', origin: 'https://example.invalid', themeStorageKey: 123 };\nvoid [explicitUndefined, invalidStorageKey];\n`;
   fixture += `// @ts-expect-error Internal source is not public\nimport Private from '${name}/src/Action.astro';\nvoid Private;\n`;
   await writeFile(path.join(consumer, 'src/props.ts'), fixture);
   const tsc = path.join(consumer, 'node_modules/typescript/bin/tsc');
   const astro = path.join(consumer, 'node_modules/astro/bin/astro.mjs');
   for (const mode of ['Bundler', 'NodeNext']) {
-    await writeFile(path.join(consumer, 'tsconfig.json'), JSON.stringify({ extends: 'astro/tsconfigs/strict', compilerOptions: { module: mode === 'Bundler' ? 'ESNext' : 'NodeNext', moduleResolution: mode } }));
+    await writeFile(path.join(consumer, 'tsconfig.json'), JSON.stringify({ extends: 'astro/tsconfigs/strict', compilerOptions: { module: mode === 'Bundler' ? 'ESNext' : 'NodeNext', moduleResolution: mode, exactOptionalPropertyTypes: true } }));
     run(process.execPath, [tsc, '--noEmit']);
   }
+  const pagePath = path.join(consumer, 'src/pages/index.astro');
+  const page = await readFile(pagePath, 'utf8');
+  assert(page.includes('<Layout title='));
+  await writeFile(pagePath, page.replace('<Layout title=', '<Layout themeStorageKey={undefined} title='));
   run(process.execPath, [astro, 'check']);
   run(process.execPath, [astro, 'build']);
   await writeFile(path.join(consumer, 'resolve.mjs'), `import assert from 'node:assert/strict';\n${Object.entries(manifest.exports).map(([key, target]) => `assert.equal(import.meta.resolve('${name}${key.slice(1)}'), new URL('./node_modules/${name}/${(typeof target === 'string' ? target : target.default).slice(2)}', import.meta.url).href);`).join('\n')}\nassert.throws(() => import.meta.resolve('${name}/src/Action.astro'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });\n`);
   run(process.execPath, ['resolve.mjs']);
+  // Revert only the declaration in the installed archive to prove this consumer
+  // distinguishes the pre-fix contract from the repaired one.
+  const layoutDeclarationPath = path.join(installed, 'src/Layout.d.ts');
+  const declaration = await readFile(layoutDeclarationPath, 'utf8');
+  const oldDeclaration = declaration.replace("(props: ConsumerProps)", "(props: Props)");
+  assert.notEqual(oldDeclaration, declaration);
+  await writeFile(layoutDeclarationPath, oldDeclaration);
+  try {
+    const diagnostics = run(process.execPath, [tsc, '--noEmit'], consumer, 2);
+    assert.match(diagnostics, /TS2375/);
+    assert.match(diagnostics, /themeStorageKey/);
+  } finally { await writeFile(layoutDeclarationPath, declaration); }
   // Restore the original export map in the installed copy only. This must recover
   // the exact failure, even while the new declaration files remain in the payload.
   const original = structuredClone(manifest);
@@ -70,8 +87,8 @@ try {
     const diagnostics = run(process.execPath, [tsc, '--noEmit'], consumer, 2);
     for (const subpath of Object.keys(cases)) assert(diagnostics.includes(`Cannot find module '${name}/${subpath}'`), diagnostics);
     assert.equal((diagnostics.match(/TS2307/g) || []).length, 12, diagnostics);
-    assert.equal((diagnostics.match(/TS2578/g) || []).length, 12, diagnostics);
-    console.log('Original export-map control: 12 TS2307 import failures and 12 unused negative-prop directives.');
+    assert.equal((diagnostics.match(/TS2578/g) || []).length, 13, diagnostics);
+    console.log('Original export-map control: 12 TS2307 import failures and 13 unused negative-prop directives.');
   } finally { await writeFile(manifestPath, JSON.stringify(manifest)); }
   run(process.execPath, [tsc, '--noEmit']);
   console.log(JSON.stringify({ sourceCommit: run('git', ['rev-parse', 'HEAD'], root).trim(), node: process.version, archiveSha256: createHash('sha256').update(await readFile(path.join(consumer, 'vendor', packed.filename))).digest('hex'), components: components.length, bundler: 'passed', nodeNext: 'passed', negativeProps: 'passed', astroCheck: 'passed', astroBuild: 'passed', runtimeResolution: 'passed', privateSubpaths: 'rejected', originalExportMap: 'failure confirmed', restoredCandidate: 'passed' }, null, 2));
