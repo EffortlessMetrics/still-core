@@ -29,7 +29,9 @@ test('theme supports persistence, keyboard and system preference', async ({ page
 test.describe('back-forward cache', () => {
   test.skip(!!process.env.STILL_THIN_UPGRADE || !!process.env.STILL_PACKED_CONSUMER, 'Historical consumers retain their original runtime');
   test('back-forward restoration reflects the theme selected on the next page', async () => {
-      const browser = await chromium.launch({ ...(process.env.STILL_BROWSER_EXECUTABLE ? { executablePath: process.env.STILL_BROWSER_EXECUTABLE } : {}), ignoreDefaultArgs: ['--disable-back-forward-cache'] });
+    // Playwright's default headless shell does not reliably support BFCache;
+    // use the full Chromium build and explicitly enable its cache.
+    const browser = await chromium.launch({ ...(process.env.STILL_BROWSER_EXECUTABLE ? { executablePath: process.env.STILL_BROWSER_EXECUTABLE } : { channel: 'chromium' }), ignoreDefaultArgs: ['--disable-back-forward-cache'] });
       try {
       const page = await browser.newPage();
       await page.emulateMedia({ colorScheme: 'light' });
@@ -41,7 +43,7 @@ test.describe('back-forward cache', () => {
       await page.getByRole('button', { name: 'Switch light or dark theme' }).click();
       await page.evaluate(() => history.back());
       await expect(page).toHaveURL('http://127.0.0.1:4390/');
-      expect(await page.evaluate(() => (window as any).restoredFromCache)).toBe(true);
+      await expect.poll(() => page.evaluate(() => (window as any).restoredFromCache)).toBe(true);
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
       await expect(page.getByRole('button', { name: 'Switch light or dark theme' })).toHaveAttribute('aria-pressed', 'true');
       await page.getByRole('button', { name: 'Switch light or dark theme' }).click();
