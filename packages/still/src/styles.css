@@ -448,3 +448,15 @@ h1, h2, h3 { overflow-wrap: anywhere; }
     mask-image: linear-gradient(to right, transparent, #000 50%, transparent);
   }
 }
+
+/* Hide the full link regardless of text size; keep its focused outline in view. */
+.skip {
+  top: 0;
+  transform: translateY(-100%);
+}
+.skip:focus {
+  left: 8px;
+  max-width: calc(100% - 16px);
+  overflow-wrap: anywhere;
+  transform: none;
+}
