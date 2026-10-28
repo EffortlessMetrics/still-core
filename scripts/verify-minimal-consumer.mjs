@@ -204,10 +204,11 @@ try {
   for (const file of expected) currentFiles[file] = sha256(await readFile(path.join(root, 'packages/still', file)));
   const candidate = await qualify(packed.version, path.join(consumer, current), currentFiles, true, true);
   const historicalLayout = execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/src/Layout.astro']);
-  const reference = await layoutReferenceOutput(consumer, historicalLayout);
+  const historicalHeader = execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/src/Header.astro']);
+  const reference = await layoutReferenceOutput(consumer, historicalLayout, historicalHeader);
   assert.notDeepEqual(candidate.output, reference.output, 'Production runtime delta must remain visible in output evidence');
   assert.deepEqual(reference.output, baseline.output, 'Only bundled CSS bytes and their exact HTML URLs may change');
   assert.deepEqual(candidate.defaultGeometry, baseline.defaultGeometry, 'Default columns, cards, footer, actions and prices remain unchanged');
   for (const report of [baseline, candidate]) { report.defaultGeometrySha256 = sha256(Buffer.from(JSON.stringify(report.defaultGeometry))); delete report.defaultGeometry; }
-  console.log(JSON.stringify({ sourceCommit: run('git', ['rev-parse', 'HEAD'], root, process.env, true).trim(), node: process.version, browser: process.env.STILL_BROWSER_EXECUTABLE || 'Playwright bundled Chromium', baseline, candidate, layoutRuntimeDelta: reference.source, productionOutputRestoration: 'passed', dependencyLockOnlyUpgrade: 'passed', historicalLayoutStylesheetOnlyOutputChange: 'passed', defaultCompositionParity: 'passed' }, null, 2));
+  console.log(JSON.stringify({ sourceCommit: run('git', ['rev-parse', 'HEAD'], root, process.env, true).trim(), node: process.version, browser: process.env.STILL_BROWSER_EXECUTABLE || 'Playwright bundled Chromium', baseline, candidate, layoutRuntimeDelta: reference.source, headerRuntimeDelta: reference.headerSource, productionOutputRestoration: 'passed', dependencyLockOnlyUpgrade: 'passed', historicalReferenceStylesheetOnlyOutputChange: 'passed', defaultCompositionParity: 'passed' }, null, 2));
 } finally { await rm(temporary, { recursive: true, force: true }); }

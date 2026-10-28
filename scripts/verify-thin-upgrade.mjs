@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { authenticateFixture, fixture, root, stillName, sha256, integrity, json, run, snapshot, assertUpgradeScope, verifyInstalled, frozenRelocationFiles } from './upgrade-fixture.mjs';
 import { compatibleOutput } from './compatible-output.mjs';
-import { assertLayoutRuntimeDelta, layoutReferenceOutput } from './layout-runtime-delta.mjs';
+import { assertLayoutRuntimeDelta, assertHeaderRuntimeDelta, layoutReferenceOutput } from './layout-runtime-delta.mjs';
 
 const provenance = await authenticateFixture();
 run(process.execPath, ['scripts/audit-boundary.mjs'], root);
@@ -104,15 +104,18 @@ try {
   }
   const historicalManifest = JSON.parse(execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/package.json'], { encoding: 'utf8' }));
   const historicalLayout = execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/src/Layout.astro']);
+  const historicalHeader = execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/src/Header.astro']);
   const layoutDelta = assertLayoutRuntimeDelta(await readFile(path.join(root, 'packages/still/src/Layout.astro')), historicalLayout);
+  const headerDelta = assertHeaderRuntimeDelta(await readFile(path.join(root, 'packages/still/src/Header.astro')), historicalHeader);
   const currentManifest = await json(path.join(root, 'packages/still/package.json'));
   assert.deepEqual(Object.fromEntries(Object.entries(currentManifest.exports).map(([name, target]) => [name, typeof target === 'string' ? target : target.default])), historicalManifest.exports, 'Public runtime exports remain unchanged');
   for (const file of expectedFiles.filter(file => file.endsWith('.astro') || file.endsWith('.css'))) {
     assert.equal(relocationRecord.files[file], provenance.historicalStill.files[file], 'Frozen relocation runtime payload unchanged: ' + file);
     if (file !== 'src/styles.css') {
-      const historicalReferenceHash = file === 'src/Layout.astro' ? layoutDelta.historicalSha256 : candidateRecord.files[file];
+      const historicalReferenceHash = file === 'src/Layout.astro' ? layoutDelta.historicalSha256 : file === 'src/Header.astro' ? headerDelta.historicalSha256 : candidateRecord.files[file];
       assert.equal(historicalReferenceHash, provenance.historicalStill.files[file], 'Component runtime payload unchanged: ' + file);
       if (file === 'src/Layout.astro') assert.equal(candidateRecord.files[file], layoutDelta.candidateSha256, 'Exact reviewed Layout delta is packed');
+      if (file === 'src/Header.astro') assert.equal(candidateRecord.files[file], headerDelta.candidateSha256, 'Exact reviewed Header delta is packed');
     }
   }
   const historicalCss = execFileSync('tar', ['-xOf', relocationArchive, 'package/src/styles.css']);
@@ -125,11 +128,11 @@ try {
   const baselineOutput = await snapshot(path.join(baseline, 'dist'));
   assert.deepEqual(await snapshot(path.join(relocated, 'dist')), baselineOutput, 'Frozen 0.2.0-to-0.2.1 output and digest-derived worker remain byte-identical');
   const productionCompatible = await compatibleOutput(path.join(candidate, 'dist'), { worker: true });
-  const reference = await layoutReferenceOutput(candidate, historicalLayout, { worker: true });
+  const reference = await layoutReferenceOutput(candidate, historicalLayout, historicalHeader, { worker: true });
   assert.notDeepEqual(productionCompatible, reference.output, 'Production runtime delta must remain visible in output evidence');
   assert.deepEqual(reference.output, await compatibleOutput(path.join(baseline, 'dist'), { worker: true }), 'Feature output changes only stylesheet bytes/URLs and the browser-qualified digest worker');
   assert.notEqual(output['reading-worker.js'], baselineOutput['reading-worker.js'], 'Changed CSS bytes must regenerate the output-digest worker');
-  console.log(JSON.stringify({ fixtureSource: provenance.starter.commit, historicalSource: provenance.historicalStill.commit, candidateSource: newDelivery.archives[stillName].sourceCommit, historicalArchiveMatchesAcceptedBusiness: provenance.historicalStill.matchesAcceptedBusinessArchive, reports, changed: ['package.json', 'STARTER-DELIVERY.json', 'package-lock.json'], addedArchive: freshFile, layoutRuntimeDelta: layoutDelta, productionOutputRestoration: 'passed', historicalLayoutComponentRuntimeAndExports: 'unchanged', existingCssPrefix: 'unchanged', runtimeFiles: expectedFiles.filter(file => file.endsWith('.astro') || file.endsWith('.css')).length, exports: Object.keys(currentManifest.exports).length, contentStyleGeometry: 'passed', geometrySha256: sha256(await readFile(geometryFile)), frozenRelocationOutputAndWorkerParity: 'passed', historicalLayoutStylesheetAndDigestWorkerChange: 'passed', outputFiles: Object.keys(output).length, outputInventorySha256: sha256(Buffer.from(JSON.stringify(Object.entries(output).sort()))), workerSha256: output['reading-worker.js'], hostedAcceptance: 'not run', publication: 'not performed' }, null, 2));
+  console.log(JSON.stringify({ fixtureSource: provenance.starter.commit, historicalSource: provenance.historicalStill.commit, candidateSource: newDelivery.archives[stillName].sourceCommit, historicalArchiveMatchesAcceptedBusiness: provenance.historicalStill.matchesAcceptedBusinessArchive, reports, changed: ['package.json', 'STARTER-DELIVERY.json', 'package-lock.json'], addedArchive: freshFile, layoutRuntimeDelta: layoutDelta, headerRuntimeDelta: headerDelta, productionOutputRestoration: 'passed', historicalReferenceComponentRuntimeAndExports: 'unchanged', existingCssPrefix: 'unchanged', runtimeFiles: expectedFiles.filter(file => file.endsWith('.astro') || file.endsWith('.css')).length, exports: Object.keys(currentManifest.exports).length, contentStyleGeometry: 'passed', geometrySha256: sha256(await readFile(geometryFile)), frozenRelocationOutputAndWorkerParity: 'passed', historicalReferenceStylesheetAndDigestWorkerChange: 'passed', outputFiles: Object.keys(output).length, outputInventorySha256: sha256(Buffer.from(JSON.stringify(Object.entries(output).sort()))), workerSha256: output['reading-worker.js'], hostedAcceptance: 'not run', publication: 'not performed' }, null, 2));
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }
