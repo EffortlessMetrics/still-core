@@ -70,3 +70,83 @@ test('worker receipts authenticate exact corpus bytes and normalized policy stay
     await assert.rejects(output('bad-runtime-entries', 'styles.new.css', 'body{}', undefined, false, '', true), /Runtime entries must equal/);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
+
+test('only real stylesheet attributes in generated HTML are normalized', async () => {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'still-html-evidence-'));
+  try {
+    const cases = [
+      css => `<textarea><link rel="stylesheet" href="/_astro/${css}"></textarea>`,
+      css => `<template><link rel="stylesheet" href="/_astro/${css}"></template>`,
+      css => `<title><link rel="stylesheet" href="/_astro/${css}"></title>`,
+      css => `<p title="<link rel='stylesheet' href='/_astro/${css}'>">Consumer</p>`,
+      css => `<link data-note=' rel="stylesheet" ' href="/_astro/${css}" rel="icon">`,
+      css => `<link rel="stylesheet" data-note=' href="/_astro/${css}" ' href="/fixed.css">`,
+      css => `<script>const s='<link rel="stylesheet" href="/_astro/${css}">';</script>`,
+      css => `<!-- <link rel="stylesheet" href="/_astro/${css}"> -->`,
+      css => `<style>x::after{content:'<link rel="stylesheet" href="/_astro/${css}">'}</style>`,
+    ];
+    for (const suffix of cases) {
+      const outputs = [];
+      for (const css of ['old.css', 'new.css']) {
+        const directory = path.join(temporary, css);
+        await mkdir(path.join(directory, '_astro'), { recursive: true });
+        await writeFile(path.join(directory, '_astro', css), 'body{}');
+        await writeFile(path.join(directory, 'index.html'), `<link rel="stylesheet" href="/_astro/${css}">${suffix(css)}`);
+        outputs.push(await compatibleOutput(directory));
+      }
+      assert.notDeepEqual(outputs[0], outputs[1]);
+      for (const css of ['old.css', 'new.css']) await rm(path.join(temporary, css), { recursive: true, force: true });
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }); }
+});
+
+test('copied public HTML remains byte-exact even when it contains stylesheet links', async () => {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'still-public-html-'));
+  try {
+    const outputs = [];
+    for (const css of ['old.css', 'new.css']) {
+      const consumer = path.join(temporary, css);
+      await mkdir(path.join(consumer, 'dist/_astro'), { recursive: true });
+      await mkdir(path.join(consumer, 'public/nested'), { recursive: true });
+      const html = `<link rel="stylesheet" href="/_astro/${css}">`;
+      await writeFile(path.join(consumer, 'public/nested/manual.html'), html);
+      await mkdir(path.join(consumer, 'dist/nested'), { recursive: true });
+      await writeFile(path.join(consumer, 'dist/nested/manual.html'), html);
+      await writeFile(path.join(consumer, 'dist/index.html'), html);
+      await writeFile(path.join(consumer, 'dist/_astro', css), 'body{}');
+      outputs.push(await compatibleOutput(path.join(consumer, 'dist')));
+    }
+    assert.equal(outputs[0]['index.html'], outputs[1]['index.html']);
+    assert.notEqual(outputs[0]['nested/manual.html'], outputs[1]['nested/manual.html']);
+  } finally { await rm(temporary, { recursive: true, force: true }); }
+});
+
+test('worker comparison retains copied public HTML digests', async () => {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'still-public-worker-'));
+  try {
+    const { createHash } = await import('node:crypto');
+    const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+    const outputs = [];
+    for (const css of ['old.css', 'new.css']) {
+      const consumer = path.join(temporary, css);
+      const dist = path.join(consumer, 'dist');
+      await mkdir(path.join(dist, '_astro'), { recursive: true });
+      await mkdir(path.join(consumer, 'public'), { recursive: true });
+      const html = `<link rel="stylesheet" href="/_astro/${css}">`;
+      await writeFile(path.join(consumer, 'public/manual.html'), html);
+      await writeFile(path.join(dist, 'manual.html'), html);
+      await writeFile(path.join(dist, 'index.html'), html);
+      await writeFile(path.join(dist, '_astro', css), 'body{}');
+      const urls = ['/', '/_astro/' + css, '/manual.html'];
+      const digests = { '/': digest(html), ['/_astro/' + css]: digest('body{}'), '/manual.html': digest(html) };
+      const revision = (css === 'old.css' ? 'a' : 'b').repeat(20);
+      const receipt = { revision, resources: 3, files: 3, bytes: Buffer.byteLength(html) * 2 + 6, urls, largestHtmlBytes: Buffer.byteLength(html) };
+      await writeFile(path.join(dist, 'offline-receipt.json'), JSON.stringify(receipt));
+      const entries = Object.entries(digests).map(([url, value]) => ({ url, digest: value }));
+      await writeFile(path.join(dist, 'reading-worker.js'), `const REVISION=${JSON.stringify(revision)};const URLS=${JSON.stringify(urls)};const DIGESTS=${JSON.stringify(digests)};\nOfflineRuntime.installWorker({},${JSON.stringify(entries)},REVISION,PREFIX);`);
+      outputs.push(await compatibleOutput(dist, { worker: true }));
+    }
+    assert.notEqual(outputs[0]['manual.html'], outputs[1]['manual.html']);
+    assert.notEqual(outputs[0]['reading-worker.js'], outputs[1]['reading-worker.js']);
+  } finally { await rm(temporary, { recursive: true, force: true }); }
+});
