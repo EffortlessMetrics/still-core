@@ -15,11 +15,40 @@ function load(storage, { key = 'site-theme', systemDark = false, unavailable = f
   const preference = { matches: systemDark, addEventListener(name, fn) { assert.equal(name, 'change'); listeners.system = fn; } };
   const document = { documentElement: { dataset: {} }, body: { dataset: missingKey ? {} : { themeKey: key } }, getElementById(id) { assert.equal(id, 'theme'); return header ? button : null; } };
   const localStorage = { getItem(key) { if (unavailable) throw new Error('Unavailable'); return storage.get(key) ?? null; }, setItem(key, value) { if (unavailable) throw new Error('Unavailable'); storage.set(key, value); } };
-  const context = { document, localStorage, themeStorageKey: key, matchMedia: () => preference };
+  const window = { addEventListener(name, fn) { assert.equal(name, 'pageshow'); listeners.pageshow = fn; } };
+  const context = { document, localStorage, window, themeStorageKey: key, matchMedia: () => preference };
   runInNewContext(beforePaint, context);
   runInNewContext(events, context);
-  return { document, button, click: () => listeners.click(), changeSystem(dark) { preference.matches = dark; listeners.system(); } };
+  return { document, button, click: () => listeners.click(), show(persisted) { listeners.pageshow({ persisted }); }, changeSystem(dark) { preference.matches = dark; listeners.system(); } };
 }
+
+test('cached pages reread only the configured key and recover from removal or invalid values', () => {
+  for (const key of ['site-theme', 'custom', '']) {
+    const storage = new Map([[key, 'light'], ['unrelated', 'dark']]);
+    const page = load(storage, { key, systemDark: true });
+    storage.set(key, 'dark');
+    page.show(false);
+    assert.equal(page.button.pressed, 'false');
+    page.show(true);
+    assert.equal(page.document.documentElement.dataset.theme, 'dark');
+    assert.equal(page.button.pressed, 'true');
+    for (const value of [null, 'invalid']) {
+      if (value === null) storage.delete(key); else storage.set(key, value);
+      page.show(true);
+      assert.equal(page.document.documentElement.dataset.theme, undefined);
+      assert.equal(page.button.pressed, 'true');
+    }
+    assert.equal(storage.get('unrelated'), 'dark');
+  }
+});
+
+test('restoration preserves the in-memory choice if storage is unavailable', () => {
+  const page = load(new Map(), { unavailable: true });
+  page.click();
+  page.show(true);
+  assert.equal(page.document.documentElement.dataset.theme, 'dark');
+  assert.equal(page.button.pressed, 'true');
+});
 
 for (const key of ['site-theme', 'consumer-theme', '', ' spaced key ']) {
   test(`theme persists to and reloads from configured key ${JSON.stringify(key)}`, () => {
