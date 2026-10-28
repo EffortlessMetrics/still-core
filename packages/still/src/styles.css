@@ -460,3 +460,8 @@ h1, h2, h3 { overflow-wrap: anywhere; }
   overflow-wrap: anywhere;
   transform: none;
 }
+
+/* Keep the theme-only header aligned without creating an empty navigation landmark. */
+.still-header-controls { display: flex; justify-content: flex-end; align-items: center; }
+.still-header-controls button { font: inherit; font-size: 1.25rem; color: var(--accent); border: 1px solid var(--line); padding: 8px 10px; background: var(--surface); cursor: pointer; }
+@media (max-width: 760px) { .still-header-controls { margin-top: 12px; justify-content: flex-start; } }

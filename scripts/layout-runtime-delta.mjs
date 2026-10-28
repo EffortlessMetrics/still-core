@@ -20,28 +20,54 @@ export function assertLayoutRuntimeDelta(candidate, historical) {
   return { historicalSha256: sha256(historical), candidateSha256: sha256(candidate) };
 }
 
-// Keep compatibleOutput's CSS-only contract unchanged. Build a reference from
-// the installed archive with the authenticated runtime deltas reversed;
-// qualify that reference against history, then restore and rebuild production.
-export async function layoutReferenceOutput(consumer, historical, options = {}) {
-  const layout = path.join(consumer, 'node_modules', stillName, 'src/Layout.astro');
+// Authenticate the entire Header against the historical source. Only the
+// reviewed conditional landmark and its theme-only container are admitted.
+export function assertHeaderRuntimeDelta(candidate, historical) {
+  const original = historical.toString('utf8');
+  const marker = "---\n<header class:list=";
+  const oldOpen = '<nav aria-label={navigationLabel}>';
+  const newOpen = '<Navigation class={hasNavigation ? undefined : "still-header-controls"} aria-label={hasNavigation ? navigationLabel : undefined}>';
+  for (const token of [marker, oldOpen, '</nav>']) {
+    assert.equal(original.split(token).length - 1, 1, 'One historical Header marker: ' + token);
+  }
+  const expected = original.replace(marker, "const hasNavigation = links.length > 0 || Astro.slots.has('navigation');\nconst Navigation = hasNavigation ? 'nav' : 'div';\n---\n<header class:list=")
+    .replace(oldOpen, newOpen).replace('</nav>', '</Navigation>');
+  assert.deepEqual(candidate, Buffer.from(expected), 'Only the reviewed Header landmark delta may change');
+  return { historicalSha256: sha256(historical), candidateSha256: sha256(candidate) };
+}
+
+// Build a historical component reference without normalizing HTML or scripts,
+// then restore both production components and verify the complete output.
+export async function layoutReferenceOutput(consumer, historical, historicalHeader, options = {}) {
+  const src = path.join(consumer, 'node_modules', stillName, 'src');
+  const layout = path.join(src, 'Layout.astro');
+  const header = path.join(src, 'Header.astro');
   const candidate = await readFile(layout);
+  const candidateHeader = await readFile(header);
   const source = assertLayoutRuntimeDelta(candidate, historical);
+  const headerSource = assertHeaderRuntimeDelta(candidateHeader, historicalHeader);
   const output = await snapshot(path.join(consumer, 'dist'));
   const consumerSource = await snapshot(consumer);
   let reference;
   const failures = [];
   try {
     await writeFile(layout, historical);
+    await writeFile(header, historicalHeader);
     run('npm', ['run', 'build'], consumer);
     reference = await compatibleOutput(path.join(consumer, 'dist'), options);
   } catch (error) {
     failures.push(error);
   }
+  // Attempt both restores independently even if one write fails.
+  let restoreFailed = false;
+  for (const [file, bytes] of [[layout, candidate], [header, candidateHeader]]) {
+    try { await writeFile(file, bytes); } catch (error) { restoreFailed = true; failures.push(error); }
+  }
   try {
-    await writeFile(layout, candidate);
+    if (restoreFailed) throw new Error('Production rebuild skipped because component restoration failed');
     run('npm', ['run', 'build'], consumer);
     assert.deepEqual(await readFile(layout), candidate, 'Installed production Layout restored');
+    assert.deepEqual(await readFile(header), candidateHeader, 'Installed production Header restored');
     assert.deepEqual(await snapshot(path.join(consumer, 'dist')), output, 'Production output restored byte-for-byte');
     assert.deepEqual(await snapshot(consumer), consumerSource, 'Reference builds preserve consumer source, pins and lock');
   } catch (error) {
@@ -49,5 +75,5 @@ export async function layoutReferenceOutput(consumer, historical, options = {}) 
   }
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) throw new AggregateError(failures, 'Reference qualification and production restoration both failed');
-  return { output: reference, source };
+  return { output: reference, source, headerSource };
 }
