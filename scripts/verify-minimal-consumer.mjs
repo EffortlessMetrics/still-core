@@ -5,20 +5,12 @@ import path from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { chromium } from '@playwright/test';
-import { assertPropRejections } from './minimal-consumer-contract.mjs';
+import { assertPropRejections, assertReviewedExports, assertHistoricalExports } from './minimal-consumer-contract.mjs';
 import { compatibleOutput } from './compatible-output.mjs';
 import { layoutReferenceOutput } from './layout-runtime-delta.mjs';
 import { themeConfiguration } from './layout-theme-browser.mjs';
 import { authenticateArchive, fixture, root, stillName, sha256, json, run, snapshot } from './upgrade-fixture.mjs';
 
-// This consumer is authored independently; no starter source or adapter is copied.
-const exports = {
-  './layout': './src/Layout.astro', './header': './src/Header.astro', './footer': './src/Footer.astro',
-  './page': './src/Page.astro', './opening': './src/Opening.astro', './section': './src/Section.astro',
-  './offer-grid': './src/OfferGrid.astro', './offer': './src/Offer.astro', './action': './src/Action.astro',
-  './service-page': './src/ServicePage.astro', './service-columns': './src/ServiceColumns.astro',
-  './service-offer': './src/ServiceOffer.astro', './styles.css': './src/styles.css', './package.json': './package.json',
-};
 const invalidProps = {
   layout: '<Component description="Contract" origin="https://example.invalid" />', // required title
   header: '<Component brand={123} />', footer: '<Component label={123} />',
@@ -140,33 +132,34 @@ async function browserContract(supportsDividers, themeStorageFixed) {
   }
 }
 
-async function qualify(version, archive, expectedFiles, supportsDividers, themeStorageFixed = false) {
+async function qualify(version, archive, expectedFiles, reviewedExports, supportsDividers, themeStorageFixed = false) {
   const frozen = await snapshot(consumer);
   run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
   const installed = path.join(consumer, 'node_modules', stillName);
   assert((await realpath(installed)).startsWith((await realpath(consumer)) + path.sep), 'No producer workspace link');
   const manifest = await json(path.join(installed, 'package.json'));
   assert.equal(manifest.version, version);
-  assert.deepEqual(Object.fromEntries(Object.entries(manifest.exports).map(([name, target]) => [name, typeof target === 'string' ? target : target.default])), exports, 'Stable public runtime export contract');
+  assertReviewedExports(manifest.exports, reviewedExports);
   assert.equal(manifest.dependencies, undefined, 'Astro is the only runtime peer; no hidden runtime dependencies');
   assert.deepEqual(manifest.peerDependencies, { astro: '^7.3.5' });
   assert.deepEqual(await snapshot(installed), expectedFiles, 'Exact installed payload and assets');
-  const resolver = `import assert from 'node:assert/strict';\n${Object.keys(exports).map(name => `assert(import.meta.resolve(${JSON.stringify(stillName + name.slice(1))}).startsWith(new URL('./node_modules/', import.meta.url).href));`).join('\n')}\nassert.throws(() => import.meta.resolve('${stillName}/src/Layout.astro'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });`;
+  const resolver = `import assert from 'node:assert/strict';\n${Object.keys(reviewedExports).map(name => `assert(import.meta.resolve(${JSON.stringify(stillName + name.slice(1))}).startsWith(new URL('./node_modules/', import.meta.url).href));`).join('\n')}\nassert.throws(() => import.meta.resolve('${stillName}/src/Layout.astro'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });`;
   await writeFile(path.join(consumer, 'resolve.mjs'), resolver);
   run(process.execPath, ['resolve.mjs'], consumer);
   await rm(path.join(consumer, 'resolve.mjs'));
   run('npm', ['run', 'check'], consumer);
   const negative = path.join(consumer, 'src/pages/invalid');
   await mkdir(negative);
+  const negativeNames = Object.keys(invalidProps).filter(name => Object.hasOwn(reviewedExports, './' + name));
   try {
-    for (const [name, markup] of Object.entries(invalidProps)) await writeFile(path.join(negative, name + '.astro'), `---\nimport Component from '${stillName}/${name}';\n---\n${markup}\n`);
+    for (const name of negativeNames) { const markup = invalidProps[name]; await writeFile(path.join(negative, name + '.astro'), `---\nimport Component from '${stillName}/${name}';\n---\n${markup}\n`); }
     const command = process.platform === 'win32' ? process.execPath : 'npm';
     const args = process.platform === 'win32' ? [path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), 'run', 'check'] : ['run', 'check'];
     const result = spawnSync(command, args, { cwd: consumer, env: process.env, encoding: 'utf8' });
     const diagnostics = (result.stdout + result.stderr).replace(/\x1b\[[0-9;]*m/g, '');
     assert.equal(result.status, 1, 'Invalid props must fail type checking: ' + diagnostics);
-    assertPropRejections(diagnostics, Object.keys(invalidProps));
-    console.log(`Rejected invalid props on all 12 installed components (${version}).`);
+    assertPropRejections(diagnostics, negativeNames);
+    console.log(`Rejected invalid props on all ${negativeNames.length} installed components (${version}).`);
   } finally { await rm(negative, { recursive: true, force: true }); }
   run('npm', ['run', 'build'], consumer);
   const browserReport = await browserContract(supportsDividers, themeStorageFixed);
@@ -182,7 +175,12 @@ try {
   const manifest = { name: 'independent-still-consumer', private: true, type: 'module', license: 'UNLICENSED', scripts: { check: 'astro check', build: 'astro build' }, dependencies: { [stillName]: 'file:' + historical, astro: '7.3.5' }, devDependencies: { '@astrojs/check': '0.9.10', typescript: '6.0.3' } };
   await writeFile(path.join(consumer, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
   run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
-  const baseline = await qualify('0.2.0', path.join(consumer, historical), provenance.historicalStill.files, false);
+  const historicalManifest = JSON.parse(execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/package.json'], { encoding: 'utf8' }));
+  const currentManifest = await json(path.join(root, 'packages/still/package.json'));
+  assertHistoricalExports(currentManifest.exports, historicalManifest.exports);
+  const components = Object.entries(currentManifest.exports).filter(([, entry]) => (typeof entry === 'string' ? entry : entry.default).endsWith('.astro')).map(([name]) => name.slice(2)).sort();
+  assert.deepEqual(Object.keys(invalidProps).sort(), components, 'Every current component requires an explicit invalid-prop case');
+  const baseline = await qualify('0.2.0', path.join(consumer, historical), provenance.historicalStill.files, historicalManifest.exports, false);
   const before = await snapshot(consumer);
   const beforeLock = await json(path.join(consumer, 'package-lock.json'));
   const packed = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', path.join(consumer, 'vendor')], path.join(root, 'packages/still'), process.env, true))[0];
@@ -202,7 +200,7 @@ try {
   assert.deepEqual(Object.keys(after).filter(file => !(file in before)), [current]);
   const currentFiles = {};
   for (const file of expected) currentFiles[file] = sha256(await readFile(path.join(root, 'packages/still', file)));
-  const candidate = await qualify(packed.version, path.join(consumer, current), currentFiles, true, true);
+  const candidate = await qualify(packed.version, path.join(consumer, current), currentFiles, currentManifest.exports, true, true);
   const historicalLayout = execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/src/Layout.astro']);
   const historicalHeader = execFileSync('tar', ['-xOf', path.join(fixture, provenance.historicalStill.archive), 'package/src/Header.astro']);
   const reference = await layoutReferenceOutput(consumer, historicalLayout, historicalHeader);
