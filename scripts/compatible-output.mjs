@@ -1,24 +1,64 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
+import { parse } from 'parse5';
 import path from 'node:path';
 import { snapshot, sha256 } from './upgrade-fixture.mjs';
 
-// Normalize only the emitted stylesheet link, leaving content and inline runtime
-// bytes intact even if they contain the same filename or generated digest.
+// Parse without serializing: only actual HTML link attributes are eligible,
+// and every other original byte stays in place.
 function normalizeHtml(html, stylesheet) {
-  return html.replace(/<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>|<link\b[^>]*>/gi, tag => {
-    if (!/^<link\b/i.test(tag)) return tag;
-    const rel = tag.match(/\srel\s*=\s*(["'])(.*?)\1/i);
-    if (!rel || !rel[2].split(/\s+/).includes('stylesheet')) return tag;
-    return tag.replace(/(\shref\s*=\s*)(["'])(.*?)\2/gi, (attribute, prefix, quote, href) =>
-      href === '/' + stylesheet ? prefix + quote + '/__stylesheet__.css' + quote : attribute);
-  });
+  const replacements = [];
+  const visit = node => {
+    if (node.tagName === 'link' && node.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+      const rel = node.attrs.find(attr => attr.name === 'rel')?.value;
+      const href = node.attrs.find(attr => attr.name === 'href')?.value;
+      const location = node.sourceCodeLocation?.attrs?.href;
+      if (rel?.toLowerCase().split(/\s+/).includes('stylesheet') && href === '/' + stylesheet && location) {
+        const attribute = html.slice(location.startOffset, location.endOffset);
+        const match = /^href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'`=<>]+))$/i.exec(attribute);
+        const raw = match && (match[1] ?? match[2] ?? match[3]);
+        // Refuse normalization if entities or unusual syntax obscure exact bytes.
+        if (raw === href) {
+          const valueOffset = attribute.indexOf(raw, attribute.indexOf('=') + 1);
+          replacements.push([location.startOffset + valueOffset, location.startOffset + valueOffset + raw.length]);
+        }
+      }
+    }
+    // Template contents are inert consumer data, not active stylesheet links.
+    for (const child of node.childNodes || []) visit(child);
+  };
+  visit(parse(html, { sourceCodeLocationInfo: true, scriptingEnabled: false }));
+  for (const [start, end] of replacements.sort((a, b) => b[0] - a[0])) {
+    html = html.slice(0, start) + '/__stylesheet__.css' + html.slice(end);
+  }
+  return html;
+}
+
+// Public files are copied assets, not generated pages; none of their bytes may
+// be normalized, including when the same paths occur in the worker corpus.
+async function publicHtml(directory) {
+  const root = path.join(path.dirname(directory), 'public');
+  const files = new Set();
+  async function visit(relative = '') {
+    let entries;
+    try { entries = await readdir(path.join(root, relative), { withFileTypes: true }); }
+    catch (error) { if (!relative && error.code === 'ENOENT') return; throw error; }
+    for (const entry of entries) {
+      const file = relative ? relative + '/' + entry.name : entry.name;
+      assert(!entry.isSymbolicLink(), 'Public source must not contain symlinks: ' + file);
+      if (entry.isDirectory()) await visit(file);
+      else if (file.endsWith('.html')) files.add(file);
+    }
+  }
+  await visit();
+  return files;
 }
 
 // The opt-in CSS adds bytes and changes its content-hashed URL. Preserve every
 // unrelated output byte; HTML may change only stylesheet-link hrefs.
 export async function compatibleOutput(directory, { worker = false } = {}) {
   const files = await snapshot(directory);
+  const publicFiles = await publicHtml(directory);
   const css = Object.keys(files).filter(file => file.endsWith('.css'));
   assert.equal(css.length, 1, 'Expected the single bundled Still/consumer stylesheet');
   const result = {};
@@ -27,7 +67,7 @@ export async function compatibleOutput(directory, { worker = false } = {}) {
   for (const [file, hash] of Object.entries(files)) {
     if (file === css[0]) { result['__stylesheet__.css'] = 'qualified separately'; continue; }
     if (worker && ['reading-worker.js', 'offline-receipt.json'].includes(file)) continue;
-    if (file.endsWith('.html')) result[file] = sha256(normalize(await readFile(path.join(directory, file), 'utf8')));
+    if (file.endsWith('.html') && !publicFiles.has(file)) result[file] = sha256(normalize(await readFile(path.join(directory, file), 'utf8')));
     else result[file] = hash;
   }
   if (worker) {
@@ -60,7 +100,7 @@ export async function compatibleOutput(directory, { worker = false } = {}) {
       assert.equal(digestMap[url], digest, 'Worker digest must authenticate emitted body: ' + url);
       bytes += body.length;
       if (relative.endsWith('.html')) largestHtmlBytes = Math.max(largestHtmlBytes, body.length);
-      const compatibleDigest = relative === css[0] ? '__stylesheet_digest__' : relative.endsWith('.html') ? sha256(normalize(body.toString('utf8'))) : digest;
+      const compatibleDigest = relative === css[0] ? '__stylesheet_digest__' : relative.endsWith('.html') && !publicFiles.has(relative) ? sha256(normalize(body.toString('utf8'))) : digest;
       normalizedEntries.push({ url: normalizeUrl(url), digest: compatibleDigest });
     }
     normalizedEntries.sort((a, b) => a.url < b.url ? -1 : a.url > b.url ? 1 : 0);

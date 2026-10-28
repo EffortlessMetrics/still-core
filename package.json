@@ -19,7 +19,8 @@
     "verify:types": "node scripts/verify-component-types.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0"
+    "@playwright/test": "1.63.0",
+    "parse5": "8.0.1"
   },
   "engines": {
     "node": ">=24.19.0 <25"
